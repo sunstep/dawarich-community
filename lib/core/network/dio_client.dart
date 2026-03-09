@@ -1,6 +1,7 @@
 import 'package:dawarich/core/network/errors/remote_request_failure.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:native_dio_adapter/native_dio_adapter.dart';
 import 'package:option_result/option_result.dart';
 
 final class DioClient {
@@ -13,6 +14,7 @@ final class DioClient {
     receiveTimeout: const Duration(seconds: 20),
   )) {
     _dio.interceptors.addAll(interceptors);
+    _dio.httpClientAdapter = NativeAdapter();
 
     assert(() {
       _dio.interceptors.add(LogInterceptor(
