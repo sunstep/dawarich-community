@@ -2,6 +2,7 @@ import 'package:dawarich/core/application/usecases/api/delete_point_usecase.dart
 import 'package:dawarich/core/application/usecases/api/get_points_usecase.dart';
 import 'package:dawarich/core/application/usecases/api/get_total_pages_usecase.dart';
 import 'package:dawarich/features/batch/application/usecases/batch_upload_workflow_usecase.dart';
+import 'package:dawarich/features/batch/application/usecases/check_and_upload_expired_batch_usecase.dart';
 import 'package:dawarich/features/batch/application/usecases/check_batch_threshold_usecase.dart';
 import 'package:dawarich/features/batch/application/usecases/get_current_batch_usecase.dart';
 import 'package:dawarich/features/stats/application/repositories/countries_repository_interfaces.dart';
@@ -210,6 +211,15 @@ final wasLaunchedFromNotificationUseCaseProvider = Provider<WasLaunchedFromNotif
 final getBatchPointCountUseCaseProvider = FutureProvider<GetBatchPointCountUseCase>((ref) async {
   final repo = await ref.watch(pointLocalRepositoryProvider.future);
   return GetBatchPointCountUseCase(repo);
+});
+
+final checkAndUploadExpiredBatchUseCaseProvider = FutureProvider<CheckAndUploadExpiredBatchUseCase>((ref) async {
+  final getSettings = await ref.watch(getTrackerSettingsUseCaseProvider.future);
+  final localRepo = await ref.watch(pointLocalRepositoryProvider.future);
+  final getCurrentBatch = await ref.watch(getCurrentBatchUseCaseProvider.future);
+  final batchUploadWorkflow = await ref.watch(batchUploadWorkflowUseCaseProvider.future);
+
+  return CheckAndUploadExpiredBatchUseCase(getSettings, localRepo, getCurrentBatch, batchUploadWorkflow);
 });
 
 final getLastPointUseCaseProvider = FutureProvider<GetLastPointUseCase>((ref) async {

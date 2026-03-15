@@ -104,10 +104,10 @@ class BackgroundTrackingEntry {
   }
 
   static Future<void> _startBackgroundTracking(
-    ServiceInstance backgroundService,
-    ProviderContainer container,
-    int userId,
-  ) async {
+      ServiceInstance backgroundService,
+      ProviderContainer container,
+      int userId,
+      ) async {
     if (kDebugMode) {
       debugPrint('[Background] Starting background tracking...');
     }
@@ -116,9 +116,31 @@ class BackgroundTrackingEntry {
     await automation.startTracking(userId);
 
     try {
+      final checkExpiredBatch =
+      await container.read(checkAndUploadExpiredBatchUseCaseProvider.future);
+
+      final expirationResult = await checkExpiredBatch(userId);
+
+      if (expirationResult case Ok(value: final didUpload)) {
+        if (kDebugMode && didUpload) {
+          debugPrint('[Background] Expired batch found and uploaded.');
+        }
+      } else if (expirationResult case Err(value: final err)) {
+        debugPrint('[Background] Expired batch check failed: $err');
+      }
+    } catch (e, s) {
+      debugPrint('[Background] Error during expired batch check: $e\n$s');
+    }
+
+    try {
       final getLastPoint = await container.read(getLastPointUseCaseProvider.future);
       final getBatchCount = await container.read(getBatchPointCountUseCaseProvider.future);
-      await setInitialForegroundNotification(getLastPoint, getBatchCount, backgroundService, userId);
+      await setInitialForegroundNotification(
+        getLastPoint,
+        getBatchCount,
+        backgroundService,
+        userId,
+      );
     } catch (_) {
       // ignore
     }
