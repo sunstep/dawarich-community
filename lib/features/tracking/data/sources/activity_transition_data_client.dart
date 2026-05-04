@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// Polls activity_transition_event.json written by the native
-/// ActivityTransitionReceiver (GMS) or MotionSensorManager (FOSS).
+/// MotionSensorManager on both GMS and FOSS builds.
 final class ActivityTransitionDataClient {
   final StreamController<void> _controller = StreamController<void>.broadcast();
   bool _started = false;

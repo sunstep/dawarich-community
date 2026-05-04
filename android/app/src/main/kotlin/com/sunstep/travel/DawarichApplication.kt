@@ -5,12 +5,6 @@ import android.util.Log
 import org.json.JSONObject
 import java.io.File
 
-/**
- * FOSS build Application class.
- *
- * Uses MotionSensorManager (TYPE_SIGNIFICANT_MOTION + accelerometer validation)
- * as the sole motion detection path. No Google Play Services dependency.
- */
 class DawarichApplication : Application() {
 
     companion object {
@@ -42,3 +36,4 @@ class DawarichApplication : Application() {
         }
     }
 }
+

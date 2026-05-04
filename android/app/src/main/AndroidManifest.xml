@@ -11,8 +11,6 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
-    <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
@@ -84,15 +82,5 @@
             android:name="flutterEmbedding"
             android:value="2" />
 
-        <!-- Receives GMS Activity Transition API events via PendingIntent (GMS builds only).
-             Declared here so the system can deliver the explicit broadcast even when
-             the app is not running. Harmless on FOSS builds where GMS is excluded. -->
-        <receiver
-            android:name=".ActivityTransitionReceiver"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.sunstep.travel.ACTIVITY_TRANSITION" />
-            </intent-filter>
-        </receiver>
     </application>
 </manifest>

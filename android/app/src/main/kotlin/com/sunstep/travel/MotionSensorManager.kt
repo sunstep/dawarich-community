@@ -109,7 +109,6 @@ class MotionSensorManager(
 
         sm.requestTriggerSensor(smdListener, sensor)
         smdArmed = true
-        arm()
     }
 
     private fun onSignificantMotion() {
@@ -131,6 +130,10 @@ class MotionSensorManager(
             arm()
             return
         }
+
+        buckets.forEach { it.clear() }
+        validationStartTime = System.currentTimeMillis()
+        isValidating = true
 
         sm.registerListener(accelListener, accel, SensorManager.SENSOR_DELAY_UI, handler)
         Log.d(TAG, "Accelerometer validation window started (${VALIDATION_WINDOW_MS} ms)")
