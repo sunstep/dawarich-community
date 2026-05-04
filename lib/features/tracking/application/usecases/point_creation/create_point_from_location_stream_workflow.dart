@@ -166,7 +166,7 @@ final class CreatePointFromLocationStreamWorkflow {
   ) {
     return switch (mode) {
       AutoTrackingRuntimeMode.passive => LocationPrecision.powerSave,
-      AutoTrackingRuntimeMode.monitor => LocationPrecision.high,
+      AutoTrackingRuntimeMode.monitor => LocationPrecision.balanced,
       AutoTrackingRuntimeMode.active => userPrecision,
     };
   }
@@ -178,7 +178,7 @@ final class CreatePointFromLocationStreamWorkflow {
   ) {
     return switch (mode) {
       AutoTrackingRuntimeMode.passive => 0,
-      AutoTrackingRuntimeMode.monitor => 0,
+      AutoTrackingRuntimeMode.monitor => 30,
       AutoTrackingRuntimeMode.active => _distanceFilter(precision, minDistance),
     };
   }

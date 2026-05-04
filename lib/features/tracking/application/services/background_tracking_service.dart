@@ -97,15 +97,19 @@ class BackgroundTrackingEntry {
       if (kDebugMode) {
         debugPrint('[Background] Failed to load tracker settings ($e) → shutting down.\n$s');
       }
-      await shutdown(backgroundService, 'Settings load failed');
+      await shutdown(backgroundService, 'Auto tracking OFF');
       return;
     }
+
+    // Session and settings confirmed — the service will stay alive.
+    // Signal callers that the service is ready before the heavier tracking
+    // bootstrap (provider init, sensor registration) begins.
+    backgroundService.invoke('ready');
 
     await _startBackgroundTracking(backgroundService, container, user.id);
   }
 
-  static Future<void> _startBackgroundTracking(
-      ServiceInstance backgroundService,
+  static Future<void> _startBackgroundTracking(      ServiceInstance backgroundService,
       ProviderContainer container,
       int userId,
       ) async {
@@ -357,6 +361,17 @@ final class BackgroundTrackingService {
     }
 
     await installConfigurationOnce();
+
+    // If configure() failed (not a timeout-while-already-running case), only
+    // proceed if the service is already alive from autoStartOnBoot. Otherwise
+    // startService() would launch an unconfigured service.
+    if (!_configured) {
+      final isAlreadyRunning = await FlutterBackgroundService().isRunning();
+      if (!isAlreadyRunning) {
+        return Err("Background service configuration failed.");
+      }
+      return Ok(());
+    }
 
     final isRunning = await FlutterBackgroundService().isRunning();
     if (isRunning) {

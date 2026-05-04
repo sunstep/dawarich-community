@@ -450,7 +450,6 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
     }
     setIsUpdatingTracking(true);
     await Future.delayed(const Duration(milliseconds: 500));
-    setAutomaticTracking(enable);
 
     if (enable) {
       final bool shouldShowConsentDialog = await _shouldShowConsentDialog();
@@ -481,9 +480,10 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
         return Err("Notification permission is required.");
       }
 
+      await setAutomaticTracking(enable);
+
       final serviceResult = await BackgroundTrackingService.start();
       await _openSystemSettings();
-      await setAutomaticTracking(enable);
       debugPrint("[TrackerPageViewModel] Background start result: $serviceResult");
 
       final needsFix = await _checkSystemSettings();

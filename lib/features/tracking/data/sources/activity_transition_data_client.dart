@@ -7,20 +7,31 @@ import 'package:path_provider/path_provider.dart';
 
 /// Polls activity_transition_event.json written by the native
 /// MotionSensorManager on both GMS and FOSS builds.
+///
+/// The poll timer is started on the first stream subscription and stopped
+/// when all subscriptions are cancelled, so it only runs while something is
+/// actively listening (i.e., while passive-mode wakeups are needed).
 final class ActivityTransitionDataClient {
-  final StreamController<void> _controller = StreamController<void>.broadcast();
-  bool _started = false;
+  StreamController<void>? _controller;
   Timer? _pollTimer;
   int _lastTransitionTimestamp = 0;
 
   static const String _transitionFileName = 'activity_transition_event.json';
 
-  void initialize() {
-    if (_started) {
+  Stream<void> watchTransitions() {
+    _ensureController();
+    return _controller!.stream;
+  }
+
+  void _ensureController() {
+    if (_controller != null && !_controller!.isClosed) {
       return;
     }
-    _started = true;
-    _startFilePoll();
+
+    _controller = StreamController<void>.broadcast(
+      onListen: _startFilePoll,
+      onCancel: _stopFilePoll,
+    );
   }
 
   void _startFilePoll() {
@@ -28,6 +39,11 @@ final class ActivityTransitionDataClient {
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollTransitionFile();
     });
+  }
+
+  void _stopFilePoll() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
   }
 
   Future<void> _pollTransitionFile() async {
@@ -38,16 +54,18 @@ final class ActivityTransitionDataClient {
         return;
       }
 
-
       final content = file.readAsStringSync();
       final json = jsonDecode(content) as Map<String, dynamic>;
       final timestamp = json['timestamp'] as int?;
 
       if (timestamp != null && timestamp > _lastTransitionTimestamp) {
         _lastTransitionTimestamp = timestamp;
-        debugPrint('[ActivityTransition] Motion transition from file (ts=$timestamp)');
-        if (!_controller.isClosed) {
-          _controller.add(null);
+        if (kDebugMode) {
+          debugPrint('[ActivityTransition] Motion transition from file (ts=$timestamp)');
+        }
+        final ctrl = _controller;
+        if (ctrl != null && !ctrl.isClosed) {
+          ctrl.add(null);
         }
       }
     } catch (_) {
@@ -55,19 +73,9 @@ final class ActivityTransitionDataClient {
     }
   }
 
-  Stream<void> watchTransitions() {
-    if (!_started) {
-      initialize();
-    }
-    return _controller.stream;
-  }
-
   void dispose() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
-    _started = false;
-    if (!_controller.isClosed) {
-      _controller.close();
-    }
+    _stopFilePoll();
+    _controller?.close();
+    _controller = null;
   }
 }
