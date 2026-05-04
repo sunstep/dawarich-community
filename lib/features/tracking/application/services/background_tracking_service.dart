@@ -101,10 +101,6 @@ class BackgroundTrackingEntry {
       return;
     }
 
-    // Session and settings confirmed — the service will stay alive.
-    // Signal callers that the service is ready before the heavier tracking
-    // bootstrap (provider init, sensor registration) begins.
-    backgroundService.invoke('ready');
 
     await _startBackgroundTracking(backgroundService, container, user.id);
   }
@@ -127,6 +123,8 @@ class BackgroundTrackingEntry {
     try {
       final automation = await container.read(pointAutomationServiceProvider.future);
       await automation.startTracking(userId);
+      // Tracking is confirmed healthy — signal the foreground 'ready' listener.
+      backgroundService.invoke('ready');
     } catch (e, s) {
       debugPrint('[Background] Failed to start tracking ($e) → shutting down.\n$s');
       await shutdown(backgroundService, 'startTracking failed: $e');
