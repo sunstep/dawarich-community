@@ -28,7 +28,6 @@ dependencies:
   drift: ^2.31.0
   fl_chart: ^1.1.1
   flutter_background_service: ^5.1.0
-  flutter_activity_recognition: ^4.0.0
   flutter_local_notifications: ^20.1.0
   flutter_map: ^8.2.2
   flutter_map_animations: ^0.9.0
