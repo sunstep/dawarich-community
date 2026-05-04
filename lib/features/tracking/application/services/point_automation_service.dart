@@ -507,10 +507,13 @@ final class PointAutomationService {
 
     try {
       if (kDebugMode) {
-        debugPrint("[PointAutomation] Scheduling stream recovery due to: $reason");
+        debugPrint(
+          "[PointAutomation] Scheduling stream recovery due to: $reason "
+          "(retry $_recoveryAttempt, delay ${delaySec}s)",
+        );
       }
 
-      await Future<void>.delayed(const Duration(seconds: 2));
+      await Future<void>.delayed(Duration(seconds: delaySec));
 
       if (!_isTracking || _currentUserId != userId) {
         if (kDebugMode) {
