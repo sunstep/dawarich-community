@@ -34,7 +34,6 @@ dependencies:
   flutter_map_location_marker: ^10.2.0
   flutter_riverpod: ^3.2.1
   flutter_secure_storage: ^10.0.0
-  flutter_activity_recognition: ^4.0.0
   flutter_zxing: ^2.2.1
   freezed_annotation: ^3.1.0
 
