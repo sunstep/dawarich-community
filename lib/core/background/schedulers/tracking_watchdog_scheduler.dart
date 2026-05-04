@@ -15,7 +15,7 @@ final class TrackingWatchdogWorkScheduler {
       TrackingWatchdogWorker.uniqueWorkName,
       TrackingWatchdogWorker.uniqueWorkName,
       frequency: const Duration(minutes: 15),
-      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.update,
     );
   }
 

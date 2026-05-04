@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:auto_route/annotations.dart';
-import 'package:dawarich/core/data/drift/database/sqlite_client.dart';
 import 'package:dawarich/core/di/providers/core_providers.dart';
 import 'package:dawarich/core/routing/app_router.dart';
 import 'package:dawarich/core/startup/startup_service.dart';
@@ -22,8 +21,6 @@ class SplashView extends ConsumerStatefulWidget {
 class _SplashPageState extends ConsumerState<SplashView> {
   bool _hasStartedBoot = false;
   bool _hasRetriedAfterTimeout = false;
-  bool _hasNavigatedAway = false;
-  Timer? _escapeTimer;
 
   @override
   void initState() {
@@ -31,24 +28,7 @@ class _SplashPageState extends ConsumerState<SplashView> {
     if (kDebugMode) {
       debugPrint('[SplashPage] initState called');
     }
-
-    _escapeTimer = Timer(const Duration(seconds: 15), () {
-      if (mounted && !_hasNavigatedAway) {
-        _hasNavigatedAway = true;
-        if (kDebugMode) {
-          debugPrint('[SplashPage] Hard escape timer fired — navigating to auth');
-        }
-        appRouter.replaceAll([const AuthRoute()]);
-      }
-    });
-
     _startBoot();
-  }
-
-  @override
-  void dispose() {
-    _escapeTimer?.cancel();
-    super.dispose();
   }
 
   Future<void> _startBoot() async {
@@ -66,7 +46,7 @@ class _SplashPageState extends ConsumerState<SplashView> {
       }
 
       await ref.read(coreProvider.future).timeout(
-        const Duration(seconds: 8),
+        const Duration(seconds: 10),
         onTimeout: () {
           if (kDebugMode) {
             debugPrint('[SplashPage] Core provider timed out');
@@ -75,7 +55,7 @@ class _SplashPageState extends ConsumerState<SplashView> {
         },
       );
 
-      if (!mounted || _hasNavigatedAway) return;
+      if (!mounted) return;
 
       if (kDebugMode) {
         debugPrint('[SplashPage] coreProvider initialized successfully');
@@ -83,44 +63,34 @@ class _SplashPageState extends ConsumerState<SplashView> {
 
       final container = ProviderScope.containerOf(context);
 
+      // Guard the full startup sequence with its own timeout.
+      // coreProvider.timeout(10s) only covers DB/API/network init.
+      // initializeAppFromContainer does additional work (WorkManager, session,
+      // permissions) any of which could block on a platform-channel call.
+      // Without this guard, the splash screen can stall indefinitely.
       await StartupService.initializeAppFromContainer(container).timeout(
-        const Duration(seconds: 12),
+        const Duration(seconds: 30),
         onTimeout: () {
           if (kDebugMode) {
-            debugPrint('[SplashPage] StartupService timed out after 12s');
+            debugPrint('[SplashPage] StartupService timed out after 30s');
           }
           throw TimeoutException('App startup timed out');
         },
       );
 
-      if (!mounted || _hasNavigatedAway) return;
-
-      _hasNavigatedAway = true;
-      _escapeTimer?.cancel();
-
       if (kDebugMode) {
         debugPrint('[SplashPage] Boot completed.');
       }
     } on TimeoutException {
-      if (_hasNavigatedAway) return;
-
       if (!_hasRetriedAfterTimeout) {
         _hasRetriedAfterTimeout = true;
         if (kDebugMode) {
           debugPrint('[SplashPage] Timeout - invalidating providers and retrying...');
         }
 
-        // Clear stale Drift IsolateNameServer mapping and cached instance
-        // so the retry doesn't re-watch the same stuck future. This is
-        // critical when the background service's Drift isolate is busy —
-        // without this, the retry re-watches sqliteClientProvider which
-        // is still awaiting the old (timed-out) connectSharedIsolate().
-        SQLiteClient.resetSharedState();
-        ref.invalidate(sqliteClientProvider);
         ref.invalidate(coreProvider);
         _hasStartedBoot = false;
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (_hasNavigatedAway) return;
+        await Future.delayed(const Duration(milliseconds: 1000));
         await _startBoot();
         return;
       }
@@ -128,18 +98,14 @@ class _SplashPageState extends ConsumerState<SplashView> {
       if (kDebugMode) {
         debugPrint('[SplashPage] Second timeout - navigating to auth');
       }
-      if (mounted && !_hasNavigatedAway) {
-        _hasNavigatedAway = true;
-        _escapeTimer?.cancel();
+      if (mounted) {
         appRouter.replaceAll([const AuthRoute()]);
       }
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('[SplashPage] Error during boot: $e\n$st');
       }
-      if (mounted && !_hasNavigatedAway) {
-        _hasNavigatedAway = true;
-        _escapeTimer?.cancel();
+      if (mounted) {
         appRouter.replaceAll([const AuthRoute()]);
       }
     }

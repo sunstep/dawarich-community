@@ -19,43 +19,15 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: write
-  pull-requests: write
-
 jobs:
-  # ── Read version from pubspec (baked by update-build-number.yml on every dev push) ──
-  # The build number is already committed into pubspec before this workflow runs,
-  # so there is nothing to generate or bake here — just read and pass downstream.
-  # Add [skip deploy] to a merge commit message to skip the Play upload entirely.
-  setup:
-    runs-on: ubuntu-latest
-    if: "!contains(github.event.head_commit.message, '[skip deploy]')"
-    outputs:
-      app_version: ${{ steps.ver.outputs.app_version }}
-      build_number: ${{ steps.ver.outputs.build_number }}
-    steps:
-      - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-
-      - name: Read version from pubspec
-        id: ver
-        shell: bash
-        run: |
-          set -euo pipefail
-          VLINE=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}')
-          APP_VERSION="${VLINE%%+*}"
-          BUILD_NUMBER="${VLINE##*+}"
-          echo "app_version=$APP_VERSION"   >> "$GITHUB_OUTPUT"
-          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
-          echo "Version: ${APP_VERSION}+${BUILD_NUMBER}"
-
   # ── GMS build ──
   build-gms:
-    needs: setup
     runs-on: ubuntu-latest
     env:
       JAVA_VERSION: "21"
+    outputs:
+      app_version: ${{ steps.ver.outputs.app_version }}
+      build_number: ${{ steps.ver.outputs.build_number }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -90,38 +62,34 @@ jobs:
             echo "flutter.sdk=${FLUTTER_SDK}"
           } > android/local.properties
 
-      # Cache NDK and CMake so Gradle never needs to download them mid-build.
-      - name: Cache NDK 27 and CMake 3.22
-        uses: actions/cache@v4
-        id: cache-ndk-cmake
-        with:
-          path: |
-            /usr/local/lib/android/sdk/ndk/27.0.12077973
-            /usr/local/lib/android/sdk/cmake/3.22.1
-          key: android-ndk-27.0.12077973-cmake-3.22.1-v1
-
-      - name: Install NDK and CMake (if not cached)
-        if: steps.cache-ndk-cmake.outputs.cache-hit != 'true'
+      - name: Use preinstalled NDK
         shell: bash
         run: |
           set -euo pipefail
           SDK_DIR="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          "${SDK_DIR}/cmdline-tools/latest/bin/sdkmanager" \
-            "ndk;27.0.12077973" \
-            "cmake;3.22.1"
-
-      - name: Pin NDK version in gradle.properties
-        shell: bash
-        run: |
-          set -euo pipefail
-          NDK_VERSION="27.0.12077973"
+          NDK_DIR="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-${ANDROID_NDK:-${ANDROID_NDK_LATEST_HOME:-}}}}"
+          if [ -z "${NDK_DIR}" ]; then
+            NDK_DIR=$(ls -d "${SDK_DIR}/ndk/"* 2>/dev/null | sort -V | tail -1 || true)
+          fi
+          [ -n "${NDK_DIR}" ] && [ -d "${NDK_DIR}" ] || { echo "::error::No preinstalled NDK found"; exit 1; }
+          NDK_VER="$(basename "$NDK_DIR")"
           GP=android/gradle.properties
           touch "${GP}"
           if grep -q '^android\.ndkVersion=' "${GP}"; then
-            sed -i "s/^android\.ndkVersion=.*/android.ndkVersion=${NDK_VERSION}/" "${GP}"
+            sed -i "s/^android\.ndkVersion=.*/android.ndkVersion=${NDK_VER}/" "${GP}"
           else
-            printf '\nandroid.ndkVersion=%s\n' "${NDK_VERSION}" >> "${GP}"
+            printf '\nandroid.ndkVersion=%s\n' "${NDK_VER}" >> "${GP}"
           fi
+
+      - name: Read pubspec version
+        id: ver
+        shell: bash
+        run: |
+          VLINE=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}')
+          APP_VERSION="${VLINE%%+*}"
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          echo "app_version=$APP_VERSION"   >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Flutter pub get
         run: flutter pub get
@@ -159,8 +127,8 @@ jobs:
       - name: Build GMS AAB (release)
         run: |
           flutter build appbundle --release --flavor gms \
-            --build-name=${{ needs.setup.outputs.app_version }} \
-            --build-number=${{ needs.setup.outputs.build_number }}
+            --build-name=${{ steps.ver.outputs.app_version }} \
+            --build-number=${{ steps.ver.outputs.build_number }}
 
       - name: Upload GMS artifact
         uses: actions/upload-artifact@v4
@@ -171,10 +139,12 @@ jobs:
 
   # ── FOSS build (parallel to GMS) ──
   build-foss:
-    needs: setup
     runs-on: ubuntu-latest
     env:
       JAVA_VERSION: "21"
+    outputs:
+      app_version: ${{ steps.ver.outputs.app_version }}
+      build_number: ${{ steps.ver.outputs.build_number }}
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
@@ -209,38 +179,34 @@ jobs:
             echo "flutter.sdk=${FLUTTER_SDK}"
           } > android/local.properties
 
-      # Cache NDK and CMake so Gradle never needs to download them mid-build.
-      - name: Cache NDK 27 and CMake 3.22
-        uses: actions/cache@v4
-        id: cache-ndk-cmake
-        with:
-          path: |
-            /usr/local/lib/android/sdk/ndk/27.0.12077973
-            /usr/local/lib/android/sdk/cmake/3.22.1
-          key: android-ndk-27.0.12077973-cmake-3.22.1-v1
-
-      - name: Install NDK and CMake (if not cached)
-        if: steps.cache-ndk-cmake.outputs.cache-hit != 'true'
+      - name: Use preinstalled NDK
         shell: bash
         run: |
           set -euo pipefail
           SDK_DIR="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          "${SDK_DIR}/cmdline-tools/latest/bin/sdkmanager" \
-            "ndk;27.0.12077973" \
-            "cmake;3.22.1"
-
-      - name: Pin NDK version in gradle.properties
-        shell: bash
-        run: |
-          set -euo pipefail
-          NDK_VERSION="27.0.12077973"
+          NDK_DIR="${ANDROID_NDK_ROOT:-${ANDROID_NDK_HOME:-${ANDROID_NDK:-${ANDROID_NDK_LATEST_HOME:-}}}}"
+          if [ -z "${NDK_DIR}" ]; then
+            NDK_DIR=$(ls -d "${SDK_DIR}/ndk/"* 2>/dev/null | sort -V | tail -1 || true)
+          fi
+          [ -n "${NDK_DIR}" ] && [ -d "${NDK_DIR}" ] || { echo "::error::No preinstalled NDK found"; exit 1; }
+          NDK_VER="$(basename "$NDK_DIR")"
           GP=android/gradle.properties
           touch "${GP}"
           if grep -q '^android\.ndkVersion=' "${GP}"; then
-            sed -i "s/^android\.ndkVersion=.*/android.ndkVersion=${NDK_VERSION}/" "${GP}"
+            sed -i "s/^android\.ndkVersion=.*/android.ndkVersion=${NDK_VER}/" "${GP}"
           else
-            printf '\nandroid.ndkVersion=%s\n' "${NDK_VERSION}" >> "${GP}"
+            printf '\nandroid.ndkVersion=%s\n' "${NDK_VER}" >> "${GP}"
           fi
+
+      - name: Read pubspec version
+        id: ver
+        shell: bash
+        run: |
+          VLINE=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}')
+          APP_VERSION="${VLINE%%+*}"
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          echo "app_version=$APP_VERSION"   >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
 
       - name: Switch pubspec to FOSS
         shell: bash
@@ -293,8 +259,8 @@ jobs:
       - name: Build FOSS APK (release)
         run: |
           flutter build apk --release --flavor foss \
-            --build-name=${{ needs.setup.outputs.app_version }} \
-            --build-number=${{ needs.setup.outputs.build_number }} \
+            --build-name=${{ steps.ver.outputs.app_version }} \
+            --build-number=${{ steps.ver.outputs.build_number }} \
             --dart-define=cronetHttpNoPlay=true \
             --dart-define=geolocatorNoPlay=true
 
@@ -306,7 +272,7 @@ jobs:
           retention-days: 30
 
   upload-production:
-    needs: [setup, build-gms, build-foss]
+    needs: [build-gms, build-foss]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -325,9 +291,8 @@ jobs:
         with:
           serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
           packageName: ${{ secrets.PACKAGE_NAME_GMS }}
-          releaseName: ${{ needs.setup.outputs.app_version }}+${{ needs.setup.outputs.build_number }}
+          releaseName: ${{ needs.build-gms.outputs.app_version }}+${{ needs.build-gms.outputs.build_number }}
           releaseFiles: dist/*.aab
           whatsNewDirectory: distribution/whatsnew
           track: production
           status: completed
-

@@ -58,17 +58,14 @@ jobs:
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Read version from tag + pubspec
+      - name: Read version from tag
         id: ver
         shell: bash
         run: |
           TAG="${{ steps.rel.outputs.tag }}"
           SEMVER="${TAG#v}"
           APP_VERSION="${SEMVER%%-*}"
-          # Read the build number baked into pubspec by the deploy workflow.
-          # This guarantees F-Droid (which reads pubspec directly) uses the same
-          # versionCode as our CI-generated changelog file.
-          BUILD_NUMBER="$(grep '^version:' pubspec.yaml | head -1 | sed 's/.*+//')"
+          BUILD_NUMBER="$(git rev-list --count HEAD)"
           echo "app_version=$APP_VERSION"   >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
           echo "full_version=$SEMVER"       >> "$GITHUB_OUTPUT"
@@ -122,39 +119,6 @@ jobs:
             echo "sdk.dir=${SDK_DIR}"
             echo "flutter.sdk=${FLUTTER_SDK}"
           } > android/local.properties
-
-      # Cache NDK and CMake so Gradle never needs to download them mid-build.
-      - name: Cache NDK 27 and CMake 3.22
-        uses: actions/cache@v4
-        id: cache-ndk-cmake
-        with:
-          path: |
-            /usr/local/lib/android/sdk/ndk/27.0.12077973
-            /usr/local/lib/android/sdk/cmake/3.22.1
-          key: android-ndk-27.0.12077973-cmake-3.22.1-v1
-
-      - name: Install NDK and CMake (if not cached)
-        if: steps.cache-ndk-cmake.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_DIR="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          "${SDK_DIR}/cmdline-tools/latest/bin/sdkmanager" \
-            "ndk;27.0.12077973" \
-            "cmake;3.22.1"
-
-      - name: Pin NDK version in gradle.properties
-        shell: bash
-        run: |
-          set -euo pipefail
-          NDK_VERSION="27.0.12077973"
-          GP=android/gradle.properties
-          touch "${GP}"
-          if grep -q '^android\.ndkVersion=' "${GP}"; then
-            sed -i "s/^android\.ndkVersion=.*/android.ndkVersion=${NDK_VERSION}/" "${GP}"
-          else
-            printf '\nandroid.ndkVersion=%s\n' "${NDK_VERSION}" >> "${GP}"
-          fi
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew
@@ -231,39 +195,6 @@ jobs:
             echo "sdk.dir=${SDK_DIR}"
             echo "flutter.sdk=${FLUTTER_SDK}"
           } > android/local.properties
-
-      # Cache NDK and CMake so Gradle never needs to download them mid-build.
-      - name: Cache NDK 27 and CMake 3.22
-        uses: actions/cache@v4
-        id: cache-ndk-cmake
-        with:
-          path: |
-            /usr/local/lib/android/sdk/ndk/27.0.12077973
-            /usr/local/lib/android/sdk/cmake/3.22.1
-          key: android-ndk-27.0.12077973-cmake-3.22.1-v1
-
-      - name: Install NDK and CMake (if not cached)
-        if: steps.cache-ndk-cmake.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          SDK_DIR="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          "${SDK_DIR}/cmdline-tools/latest/bin/sdkmanager" \
-            "ndk;27.0.12077973" \
-            "cmake;3.22.1"
-
-      - name: Pin NDK version in gradle.properties
-        shell: bash
-        run: |
-          set -euo pipefail
-          NDK_VERSION="27.0.12077973"
-          GP=android/gradle.properties
-          touch "${GP}"
-          if grep -q '^android\.ndkVersion=' "${GP}"; then
-            sed -i "s/^android\.ndkVersion=.*/android.ndkVersion=${NDK_VERSION}/" "${GP}"
-          else
-            printf '\nandroid.ndkVersion=%s\n' "${NDK_VERSION}" >> "${GP}"
-          fi
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew

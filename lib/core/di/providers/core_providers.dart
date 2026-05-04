@@ -11,10 +11,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final coreProvider = FutureProvider<void>((ref) async {
-  await Future.wait([
-    ref.watch(sqliteClientProvider.future),
-    ref.watch(dioClientProvider.future),
-  ]);
+  await ref.watch(apiConfigManagerProvider.future);
+  await ref.watch(sqliteClientProvider.future);
+  await ref.watch(dioClientProvider.future);
 });
 
 final apiConfigManagerProvider = FutureProvider<IApiConfigManager>((ref) async {
@@ -63,6 +62,9 @@ final sqliteClientProvider = FutureProvider<SQLiteClient>((ref) async {
   if (kDebugMode) {
     debugPrint('[RP - Core] SQLiteClient loaded.');
   }
+
+  // Note: We don't dispose the client here because the underlying isolate
+  // is shared across the app. Closing it would break other clients.
 
   return client;
 });

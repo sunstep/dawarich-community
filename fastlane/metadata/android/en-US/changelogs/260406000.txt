@@ -1,5 +1,0 @@
-Full and more detailed release notes are always available at the GitHub repository!
-
-v0.19.2
-
-* Change package name to better reflect that this is an unofficial project.

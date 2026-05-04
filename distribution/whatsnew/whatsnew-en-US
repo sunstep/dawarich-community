@@ -1,5 +1,7 @@
 Full and more detailed release notes are always available at the GitHub repository!
 
-v0.19.2
+v0.19.1-beta3
 
-* Change package name to better reflect that this is an unofficial project.
+* Added intelligence to auto mode. It goes to passive mode when idling, and active while moving.
+* Added a watchdog that runs every 15 minutes, it checks whether the tracker is still running when it should be running.
+

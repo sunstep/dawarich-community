@@ -1,4 +1,3 @@
-import 'dart:math' as math;
 import 'dart:async';
 import 'package:dawarich/core/data/repositories/local_point_repository_interfaces.dart';
 import 'package:dawarich/features/batch/application/usecases/batch_upload_workflow_usecase.dart';
@@ -507,13 +506,10 @@ final class PointAutomationService {
 
     try {
       if (kDebugMode) {
-        debugPrint(
-          "[PointAutomation] Scheduling stream recovery (attempt $_recoveryAttempt) "
-          "due to: $reason — waiting ${delaySec}s",
-        );
+        debugPrint("[PointAutomation] Scheduling stream recovery due to: $reason");
       }
 
-      await Future<void>.delayed(Duration(seconds: delaySec));
+      await Future<void>.delayed(const Duration(seconds: 2));
 
       if (!_isTracking || _currentUserId != userId) {
         if (kDebugMode) {
@@ -613,10 +609,6 @@ final class PointAutomationService {
   // Location update handler
 
   Future<void> _handleLocationUpdate(TrackingSample sample, int userId) async {
-    // A location update arrived — the stream is healthy. Reset the backoff
-    // counter so the next failure starts from a short delay again.
-    _recoveryAttempt = 0;
-
     try {
       final previousMode = _autoTrackingRuntimeMode;
       final settings = _currentSettings;

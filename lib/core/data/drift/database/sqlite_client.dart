@@ -70,21 +70,6 @@ final class SQLiteClient extends _$SQLiteClient {
     return SQLiteClient._(connection);
   }
 
-  /// Clears cached instance and IsolateNameServer mapping so that the next
-  /// [connectSharedIsolate] call starts completely fresh.
-  ///
-  /// Call this when recovering from a startup timeout — the cached state may
-  /// reference a Drift isolate owned by the background service that is too
-  /// busy to respond.
-  static void resetSharedState() {
-    if (kDebugMode) {
-      debugPrint('[Drift] resetSharedState: clearing cached instance and IsolateNameServer');
-    }
-    _instance = null;
-    _pendingInit = null;
-    IsolateNameServer.removePortNameMapping(_driftPortName);
-  }
-
   static Future<SQLiteClient> connectSharedIsolate() async {
     // Fast path: already have a cached instance
     if (_instance != null) {
@@ -113,11 +98,7 @@ final class SQLiteClient extends _$SQLiteClient {
 
       await SqlcipherBootstrap.ensure();
 
-      // Check for existing isolate in IsolateNameServer.
-      // This port may belong to the background service's Drift isolate.
-      // If that isolate is busy (e.g. batch upload), connect() will hang.
-      // Use a short 2s timeout — if the isolate can't respond in 2s, fall
-      // through to creating our own.
+      // Check for existing isolate in IsolateNameServer
       final existing = IsolateNameServer.lookupPortByName(_driftPortName);
       if (existing != null) {
         if (kDebugMode) {
@@ -128,7 +109,6 @@ final class SQLiteClient extends _$SQLiteClient {
           final conn = await iso.connect().timeout(const Duration(seconds: 1));
           _instance = SQLiteClient._(conn);
           completer.complete(_instance!);
-          _pendingInit = null;
           return _instance!;
         } catch (e) {
           if (kDebugMode) {

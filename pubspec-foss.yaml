@@ -2,7 +2,7 @@ name: dawarich
 description: "Dawarich mobile companion app"
 publish_to: 'none'
 
-version: 0.19.2+260406000
+version: 0.19.1
 
 environment:
   sdk: ^3.5.0

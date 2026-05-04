@@ -57,10 +57,10 @@ final class TrackingWatchdogWorker {
         debugPrint('[TrackingWatchdog] Service not running, restarting...');
       }
 
-      final started = await BackgroundTrackingService.startServiceDirect();
+      final result = await BackgroundTrackingService.start();
 
       if (kDebugMode) {
-        debugPrint('[TrackingWatchdog] Restart result: $started');
+        debugPrint('[TrackingWatchdog] Restart result: $result');
       }
     } catch (e, s) {
       debugPrint('[TrackingWatchdog] Worker failed: $e\n$s');

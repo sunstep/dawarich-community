@@ -2,14 +2,8 @@ package com.sunstep.travel
 
 import android.content.Intent
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.util.Log
-import id.flutter.flutter_background_service.BackgroundService
-import id.flutter.flutter_background_service.WatchdogReceiver
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.renderer.FlutterUiDisplayListener
 
 class MainActivity : FlutterFragmentActivity() {
 
@@ -99,10 +93,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        Log.d(TAG, "onCreate (recoveryAttempts=$recoveryAttempts)")
-
-        // Pass null to avoid restoring potentially stale/incompatible
-        // parcelled state from a previous Activity incarnation.
+        // Avoid restoring potentially incompatible parcelables from previous runs/versions.
         super.onCreate(null)
 
         Log.d(TAG, "super.onCreate(null) complete")
@@ -127,10 +118,6 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        Log.d(TAG, "configureFlutterEngine")
-
-        // Listen for the first Flutter frame so we can cancel the startup watchdog.
-        flutterEngine.renderer.addIsDisplayingFlutterUiListener(flutterUiDisplayListener)
 
         SystemSettingsChannel.register(flutterEngine, this)
         BuildConfigChannel.register(flutterEngine)
