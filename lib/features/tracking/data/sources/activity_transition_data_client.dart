@@ -28,6 +28,11 @@ final class ActivityTransitionDataClient {
   static const int _maxRetries = 5;
   static const String _transitionFileName = 'activity_transition_event.json';
 
+  // True when the FOSS dart-define is set (--dart-define=geolocatorNoPlay=true).
+  // On FOSS builds the GMS plugin stream is never subscribed to; only the
+  // file-poll path runs.
+  static const bool _isFoss = bool.fromEnvironment('geolocatorNoPlay');
+
   /// Starts both the plugin subscription and the file-poll timer.
   /// Safe to call multiple times; subsequent calls are no-ops.
   void initialize() {
@@ -36,7 +41,9 @@ final class ActivityTransitionDataClient {
       return;
     }
     _started = true;
-    _subscribe(attempt: 0);
+    if (!_isFoss) {
+      _subscribe(attempt: 0);
+    }
     _startFilePoll();
   }
 
