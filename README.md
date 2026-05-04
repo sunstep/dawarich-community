@@ -49,8 +49,28 @@
       font-size: 15px;
     ">
       <span style="font-size: 18px; margin-right: 8px;">ℹ️</span>
+      <strong>Now available on F-Droid</strong><br/>
+      Install Dawarich (Community) here:
+      <a href="https://f-droid.org/en/packages/com.sunstep.travel.foss">
+        https://f-droid.org/en/packages/com.sunstep.travel.foss
+      </a>
+    </td>
+  </tr>
+</table>
+
+<table align="center" style="max-width: 900px; width: 100%; border-collapse: separate; border-spacing: 0;">
+  <tr>
+    <td style="
+      padding: 14px 16px;
+      border-radius: 12px;
+      border: 1px solid rgba(59,130,246,0.45);
+      background: rgba(59,130,246,0.12);
+      color: inherit;
+      font-size: 15px;
+    ">
+      <span style="font-size: 18px; margin-right: 8px;">ℹ️</span>
       <strong>Now available on Google Play</strong><br/>
-      Install Dawarich Android here:
+      Install Dawarich (Community) here:
       <a href="https://play.google.com/store/apps/details?id=com.sunstep.dawarich">
         play.google.com/store/apps/details?id=com.sunstep.dawarich
       </a>
@@ -65,6 +85,11 @@
 </p>
 
 <p align="center">
+  <a href="https://f-droid.org/packages/YOUR.APP.ID">
+    <img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
+    alt="Get it on F-Droid"
+    height="80">
+</a>
   <a href="https://play.google.com/store/apps/details?id=com.sunstep.dawarich">
     <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png" height="80" alt="Get it on Google Play" />
   </a>
