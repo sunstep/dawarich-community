@@ -40,7 +40,8 @@ final class LoadTimelineUseCase {
       List<SlimApiPoint> slimPoints = pointDtos
           .map((dto) => dto.toDomain())
           .toList();
-      final lastDayTimestamp = slimPoints.lastOrNull?.timestamp;
+
+      final lastDayTimestamp = slimPoints.firstOrNull?.timestamp;
       final List<LatLng> dayPoints = _pointsProcessor.processPoints(
         slimPoints,
         distanceThresholdMeters: distanceThreshold,
