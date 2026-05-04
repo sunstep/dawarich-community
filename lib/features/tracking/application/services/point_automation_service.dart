@@ -296,13 +296,16 @@ final class PointAutomationService {
       (kind) async {
         if (!_isTracking || _currentUserId != userId) return;
 
-        // Skip the first event — connectivity_plus emits the current state
-        // immediately on subscribe. We always want to start in active mode.
+        // The first event from connectivity_plus reflects the current state at
+        // subscription time. We seed the baseline so later drop/connect events
+        // have the correct reference, but we don't act on it — the tracker
+        // always starts in active mode regardless of the initial network state.
         if (_startupConnectivityGuard) {
           _startupConnectivityGuard = false;
+          _trackerIntelligenceService.seedConnectivity(kind);
           if (kDebugMode) {
             debugPrint(
-              '[PointAutomation] Connectivity startup event suppressed ($kind)',
+              '[PointAutomation] Connectivity baseline seeded at startup ($kind)',
             );
           }
           return;

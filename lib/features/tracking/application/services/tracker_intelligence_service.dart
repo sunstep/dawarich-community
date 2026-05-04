@@ -84,6 +84,23 @@ final class TrackerIntelligenceService {
     return _currentMode;
   }
 
+  /// Records the initial connectivity state without triggering a mode change.
+  ///
+  /// Must be called once at startup before [notifyConnectivityChanged] so that
+  /// subsequent Wi-Fi drop/connect events have a correct baseline to compare
+  /// against. connectivity_plus fires the current state synchronously on
+  /// subscription; that first event should call this instead of
+  /// [notifyConnectivityChanged] to avoid a spurious mode change on startup.
+  void seedConnectivity(ConnectivityKind kind) {
+    _isOnWifi = kind == ConnectivityKind.wifi;
+    if (kDebugMode) {
+      debugPrint(
+        '[TrackerIntelligence] Connectivity baseline seeded: $kind '
+        '(isOnWifi=$_isOnWifi)',
+      );
+    }
+  }
+
   AutoTrackingRuntimeMode notifyConnectivityChanged(ConnectivityKind kind) {
     final wasOnWifi = _isOnWifi;
     _isOnWifi = kind == ConnectivityKind.wifi;
