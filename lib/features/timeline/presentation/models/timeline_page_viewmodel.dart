@@ -17,6 +17,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
+
 final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   final int userId;
   final LoadTimelineUseCase _loadTimelineUseCase;
@@ -59,6 +60,10 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   DateTime get selectedDate => _selectedDate;
 
   StreamSubscription<List<LocalPoint>>? _localPointSubscription;
+
+  /// Tracks the last-seen batch size so we can detect a post-upload cleanup
+  /// (large drop) and silently reload the API track.
+  int _lastBatchSize = 0;
 
   List<LatLng> _points = [];
   List<LatLng> get points => _points;
@@ -196,17 +201,33 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
     _resolveAndSetInitialLocation();
     await loadToday();
 
-    if (isDisposed) return;
+    if (isDisposed) {
+      return;
+    }
 
     try {
       final batchStream = _watchCurrentBatch(userId);
       _localPointSubscription = batchStream.listen((points) {
-        if (isDisposed) return;
+        if (isDisposed) {
+          return;
+        }
+
+        final previousSize = _lastBatchSize;
+        final previousBatch = _lastLocalBatch;
+        _lastBatchSize = points.length;
         _lastLocalBatch = points;
-        // Always pass the stored cutoff so batch points that are already
-        // present in the API response are never re-drawn as local points,
-        // which would cause backwards-stitching artefacts.
+
         _rebuildLocalPoints(cutoffMs: _lastApiTimestampMs);
+
+        // A large drop means the upload workflow just ran its cleanup.
+        // Move the uploaded local points directly into the API track so the
+        // transition is seamless without any network call.
+        final significantDrop =
+            previousSize > 5 && points.length < previousSize ~/ 2;
+
+        if (significantDrop && isTodaySelected()) {
+          _mergeUploadedLocalPointsIntoApiTrack(previousBatch);
+        }
       });
     } catch (e, s) {
       if (kDebugMode) {
@@ -215,13 +236,52 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
     }
   }
 
+
+  /// Moves uploaded local points directly into the API track so the blue trail
+  /// fills in immediately without a network reload.
+  void _mergeUploadedLocalPointsIntoApiTrack(List<LocalPoint> uploadedBatch) {
+    final d = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final cutoffMs = _lastApiTimestampMs;
+
+    final toMerge = uploadedBatch.where((p) {
+      final ts = p.properties.recordTimestamp;
+      final day = DateTime(ts.year, ts.month, ts.day);
+      if (day != d) {
+        return false;
+      }
+      if (cutoffMs != null && ts.millisecondsSinceEpoch <= cutoffMs) {
+        return false;
+      }
+      return true;
+    }).toList()
+      ..sort((a, b) =>
+          a.properties.recordTimestamp.compareTo(b.properties.recordTimestamp));
+
+    if (toMerge.isEmpty) {
+      return;
+    }
+
+    final merged = toMerge
+        .map((p) => LatLng(p.geometry.latitude, p.geometry.longitude))
+        .toList();
+
+    // Advance the cutoff so these points are excluded from the orange trail.
+    _lastApiTimestampMs =
+        toMerge.last.properties.recordTimestamp.millisecondsSinceEpoch;
+
+    setPoints([..._points, ...merged]);
+    _rebuildLocalPoints(cutoffMs: _lastApiTimestampMs);
+  }
+
   void _rebuildLocalPoints({int? cutoffMs}) {
     final d = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
 
     final slim = _lastLocalBatch.where((p) {
       final ts = p.properties.recordTimestamp;
       final day = DateTime(ts.year, ts.month, ts.day);
-      if (day != d) return false;
+      if (day != d) {
+        return false;
+      }
 
       if (cutoffMs != null && ts.millisecondsSinceEpoch <= cutoffMs) {
         return false;
@@ -240,9 +300,8 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
       distanceThresholdMeters: _distanceThreshold,
     );
 
-    // Stitch the local trail to the last API point *before* notifying the
-    // UI so the widget always receives a fully-connected list in one shot.
-    final stitched = _stitchToApiPoints(local);
+    List<LatLng> stitched = _stitchToApiPoints(local);
+
 
     setLocalPoints(stitched);
   }
@@ -401,24 +460,24 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   Future<void> centerMap() async {
     if (isDisposed) return;
 
-    final controller = animatedMapController;
-
-    if (!_mapReady || controller == null) {
+    if (!_mapReady || animatedMapController == null) {
       return;
     }
 
     LatLng? userLocation;
     try {
-      final position = await Geolocator.getCurrentPosition();
-      userLocation = LatLng(position.latitude, position.longitude);
-    } catch (_) {
       final last = await Geolocator.getLastKnownPosition();
       if (last != null) {
         userLocation = LatLng(last.latitude, last.longitude);
       }
-    }
+    } catch (_) {}
 
     if (isDisposed || userLocation == null) {
+      return;
+    }
+
+    final controller = animatedMapController;
+    if (controller == null) {
       return;
     }
 
