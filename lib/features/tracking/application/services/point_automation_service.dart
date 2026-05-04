@@ -438,19 +438,9 @@ final class PointAutomationService {
     final settings = _currentSettings;
     final isAutoMode = settings?.trackingFrequency == 0;
 
-    // In auto mode, passive runs a PRIORITY_NO_POWER piggyback stream as a
-    // free point recorder alongside activity recognition. Fixes from this
-    // stream are stored if they show enough displacement, but they don't drive
-    // mode transitions — evaluateFix() is skipped for passive fixes.
     if (isAutoMode == true &&
         _autoTrackingRuntimeMode == AutoTrackingRuntimeMode.passive) {
-      if (kDebugMode) {
-        debugPrint(
-          '[PointAutomation] Passive mode — starting PRIORITY_NO_POWER fallback '
-          'stream alongside activity recognition.',
-        );
-      }
-      // Fall through to start the stream with powerSave precision.
+      return;
     }
 
     final Stream<TrackingSample> pointStream =
@@ -618,13 +608,7 @@ final class PointAutomationService {
       final settings = _currentSettings;
       final isAutoMode = settings?.trackingFrequency == 0;
 
-      // In passive mode the stream is a PRIORITY_NO_POWER piggyback that
-      // records opportunistic points. It must not drive mode transitions —
-      // that's activity recognition's job.
-      final nextMode = (isAutoMode == true &&
-              previousMode == AutoTrackingRuntimeMode.passive)
-          ? previousMode
-          : _trackerIntelligenceService.evaluateFix(sample.fix);
+      final nextMode = _trackerIntelligenceService.evaluateFix(sample.fix);
 
       final didModeValueChange = previousMode != nextMode;
       final shouldRestartForModeChange = isAutoMode == true && didModeValueChange;
