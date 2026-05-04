@@ -311,14 +311,37 @@ final class CreatePointFromLocationStreamWorkflow {
         if (age < Duration.zero || age > staleMax) {
           if (kDebugMode) {
             debugPrint(
-              '[LocationStream] Cached fix too stale '
-              '(age: ${age.inSeconds}s, max: ${staleMax.inSeconds}s)',
+              '[LocationStream] Cached fix stale (age: ${age.inSeconds}s, '
+              'max: ${staleMax.inSeconds}s) — fetching fresh position',
             );
           }
-          controller.add(TrackingSample(
-            fix: fix,
-            pointResult: Err('Cached location too stale (age: ${age.inSeconds}s)'),
-          ));
+
+          // The background cache stream uses a distance filter, so a stationary
+          // device may stop delivering updates entirely. Rather than skipping the
+          // tick, request a one-shot current position so the timer keeps recording.
+          final freshResult = await _locationProvider.getCurrent(request);
+          if (freshResult case Ok(value: final freshFix)) {
+            latestFix = freshFix;
+            final result = await _createPointFromLocationFix(
+              freshFix,
+              DateTime.now().toUtc(),
+              userId,
+            );
+            if (result case Err(value: final err)) {
+              if (kDebugMode) {
+                debugPrint('[LocationStream] Fresh-fix point creation failed: $err');
+              }
+            }
+            controller.add(TrackingSample(fix: freshFix, pointResult: result));
+          } else if (freshResult case Err(value: final err)) {
+            if (kDebugMode) {
+              debugPrint('[LocationStream] Fresh position request failed: $err');
+            }
+            controller.add(TrackingSample(
+              fix: fix,
+              pointResult: Err('Cached location stale and fresh fetch failed: $err'),
+            ));
+          }
           return;
         }
 
