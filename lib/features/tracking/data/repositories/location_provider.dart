@@ -83,6 +83,8 @@ final class LocationProvider implements ILocationProvider {
         return LocationAccuracy.medium;
       case LocationPrecision.lowPower:
         return LocationAccuracy.low;
+      case LocationPrecision.powerSave:
+        return LocationAccuracy.lowest;
     }
   }
 

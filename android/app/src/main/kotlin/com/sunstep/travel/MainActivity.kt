@@ -21,7 +21,7 @@ class MainActivity : FlutterFragmentActivity() {
 
         /**
          * Tracks recovery attempts across Activity recreations within the
-         * same OS process.  Reset to 0 once Flutter successfully renders.
+         * same OS process. Reset to 0 once Flutter successfully renders.
          */
         private var recoveryAttempts = 0
     }
@@ -29,13 +29,13 @@ class MainActivity : FlutterFragmentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var flutterUiReady = false
 
-    // ── Flutter-frame listener ───────────────────────────────────────────
+    // Flutter-frame listener
     private val flutterUiDisplayListener = object : FlutterUiDisplayListener {
         override fun onFlutterUiDisplayed() {
             flutterUiReady = true
             recoveryAttempts = 0
             cancelWatchdog()
-            Log.d(TAG, "Flutter UI displayed — recovery counter reset, watchdog cancelled")
+            Log.d(TAG, "Flutter UI displayed, recovery counter reset, watchdog cancelled")
         }
 
         override fun onFlutterUiNoLongerDisplayed() {
@@ -43,7 +43,7 @@ class MainActivity : FlutterFragmentActivity() {
         }
     }
 
-    // ── Startup watchdog ─────────────────────────────────────────────────
+    // Startup watchdog
     //
     // When the background service keeps the OS process alive between user
     // sessions, its FlutterEngine holds shared native resources (Dart VM
@@ -53,14 +53,14 @@ class MainActivity : FlutterFragmentActivity() {
     //
     // Recovery strategy (two stages, 5 s each):
     //
-    //  Stage 1 – SOFT  (recoveryAttempts == 0)
+    //  Stage 1 - SOFT  (recoveryAttempts == 0)
     //      Stop the background service (releasing its engine), then
     //      recreate() this Activity so a fresh FlutterEngine starts in
-    //      a now-contention-free process.  The user sees the splash
-    //      briefly restart — no crash, no manual relaunch.
+    //      a now-contention-free process. The user sees the splash
+    //      briefly restart, no crash, no manual relaunch.
     //
-    //  Stage 2 – HARD  (recoveryAttempts >= 1)
-    //      The recreated engine still couldn't render.  Kill the process
+    //  Stage 2 - HARD  (recoveryAttempts >= 1)
+    //      The recreated engine still couldn't render. Kill the process
     //      so the next user-initiated launch is completely clean.
     //
     // The Dart-side StartupService restarts background tracking
@@ -72,8 +72,8 @@ class MainActivity : FlutterFragmentActivity() {
         recoveryAttempts++
 
         if (recoveryAttempts == 1) {
-            // ── Stage 1 – soft: stop BG service + recreate Activity ──
-            Log.w(TAG, "Flutter UI not ready after ${WATCHDOG_MS}ms — "
+            // Stage 1: stop BG service + recreate Activity
+            Log.w(TAG, "Flutter UI not ready after ${WATCHDOG_MS}ms, "
                     + "soft recovery: stopping background service + recreating Activity")
 
             markServiceManuallyStopped()
@@ -84,13 +84,13 @@ class MainActivity : FlutterFragmentActivity() {
             }
 
             // recreate() destroys the current (stuck) FlutterEngine and
-            // creates a brand-new one.  Because the BG service is being
+            // creates a brand-new one. Because the BG service is being
             // torn down concurrently, the fresh engine starts without
             // native resource contention.
             recreate()
         } else {
-            // ── Stage 2 – hard: kill the process ─────────────────────
-            Log.e(TAG, "Flutter UI still not ready after Activity recreate — "
+            // Stage 2: kill the process
+            Log.e(TAG, "Flutter UI still not ready after Activity recreate, "
                     + "killing process for clean restart (attempt $recoveryAttempts)")
 
             markServiceManuallyStopped()
@@ -107,17 +107,14 @@ class MainActivity : FlutterFragmentActivity() {
 
         Log.d(TAG, "super.onCreate(null) complete")
 
-        // ── Recovery: watchdog armed on every launch ──────────────────────────
-        //
-        // Always armed unconditionally — not just when the background service
-        // is detected.  getRunningServices() can under-report own-package
-        // services on some OEM ROMs (API 26+ deprecation side-effects), so
-        // relying on it as a gate could leave the watchdog disarmed exactly
-        // when it is needed.
+        // Watchdog is armed on every launch unconditionally, not just when the
+        // background service is detected. getRunningServices() can under-report
+        // own-package services on some OEM ROMs (API 26+ deprecation side-effects),
+        // so using it as a gate could leave the watchdog disarmed when it's needed.
         //
         // If Flutter renders normally (< 2 s on a clean launch) the display
         // listener fires, flutterUiReady is set, and the watchdog is cancelled
-        // before it expires — zero cost in the happy path.
+        // before it expires, zero cost in the happy path.
         Log.d(TAG, "Arming startup watchdog (recoveryAttempts=$recoveryAttempts)")
         handler.postDelayed(startupWatchdog, WATCHDOG_MS)
     }
@@ -139,7 +136,7 @@ class MainActivity : FlutterFragmentActivity() {
         BuildConfigChannel.register(flutterEngine)
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────
+    // Helpers
 
     private fun cancelWatchdog() {
         handler.removeCallbacks(startupWatchdog)

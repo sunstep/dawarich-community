@@ -124,6 +124,7 @@ class BackgroundTrackingEntry {
       debugPrint('[Background] Starting background tracking...');
     }
 
+
     // Wrap the critical provider resolution + tracking start in try/catch.
     // Without this, an error in the deep provider chain (e.g. DB isolate
     // timeout, Drift migration failure) propagates out of the unawaited
@@ -200,43 +201,6 @@ class BackgroundTrackingEntry {
         }
       } catch (e, s) {
         debugPrint('[Background] Error restarting tracking: $e\n$s');
-      }
-    });
-
-    // ── Foreground / background app-state notifications ────────────────────
-    //
-    // The main app sends these events so we can pause the motion detector
-    // while the foreground engine is active.  Keeping the accelerometer
-    // subscription silent during main-app engine initialisation prevents
-    // Dart-VM scheduling pressure that could stall the first-frame render.
-
-    backgroundService.on('appForegrounded').listen((event) async {
-      if (kDebugMode) {
-        debugPrint('[Background] appForegrounded received — pausing motion detector');
-      }
-      try {
-        final container = _container;
-        if (container != null) {
-          final automation = await container.read(pointAutomationServiceProvider.future);
-          automation.setMainAppForegrounded(true);
-        }
-      } catch (e, s) {
-        debugPrint('[Background] Error handling appForegrounded: $e\n$s');
-      }
-    });
-
-    backgroundService.on('appBackgrounded').listen((event) async {
-      if (kDebugMode) {
-        debugPrint('[Background] appBackgrounded received — resuming motion detector');
-      }
-      try {
-        final container = _container;
-        if (container != null) {
-          final automation = await container.read(pointAutomationServiceProvider.future);
-          automation.setMainAppForegrounded(false);
-        }
-      } catch (e, s) {
-        debugPrint('[Background] Error handling appBackgrounded: $e\n$s');
       }
     });
   }
@@ -340,7 +304,7 @@ final class BackgroundTrackingService {
       ).timeout(const Duration(seconds: 8));
     } on TimeoutException {
       debugPrint('[BackgroundService] configure() timed out — likely already running via autoStartOnBoot.');
-      // Don't set _configured — a subsequent call can retry.
+      // Don't set _configured, a subsequent call can retry.
       return;
     } catch (e) {
       debugPrint('[BackgroundService] configure() failed: $e');

@@ -85,8 +85,9 @@ LocationPrecision _mapLegacyAccuracyToPrecision(LocationAccuracy a) {
     case LocationAccuracy.medium:
       return LocationPrecision.balanced;
     case LocationAccuracy.low:
+      return LocationPrecision.lowPower;
     case LocationAccuracy.lowest:
     case LocationAccuracy.reduced:
-      return LocationPrecision.lowPower;
+      return LocationPrecision.powerSave;
   }
 }

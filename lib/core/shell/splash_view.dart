@@ -9,7 +9,6 @@ import 'package:dawarich/core/theme/app_gradients.dart';
 import 'package:dawarich/main.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @RoutePage()
@@ -60,15 +59,6 @@ class _SplashPageState extends ConsumerState<SplashView> {
       debugPrint('[SplashPage] Starting boot...');
     }
 
-    // Tell the background service to pause its motion detector immediately.
-    // The main-app engine is now running, and keeping the background isolate
-    // quiet reduces Dart-VM scheduling pressure while we initialise the DB
-    // and session — making the startup less prone to stalling.
-    try {
-      FlutterBackgroundService().invoke('appForegrounded', {});
-    } catch (_) {
-      // Service may not be running on first launch — ignore.
-    }
 
     try {
       if (kDebugMode) {

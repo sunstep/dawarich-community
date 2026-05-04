@@ -11,6 +11,8 @@
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION"/>
+    <uses-permission android:name="com.google.android.gms.permission.ACTIVITY_RECOGNITION"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
 
@@ -27,7 +29,7 @@
 
     <application
         android:label="@string/app_name"
-        android:name="${applicationName}"
+        android:name=".DawarichApplication"
         android:icon="@mipmap/ic_launcher"
         android:allowBackup="false"
         android:networkSecurityConfig="@xml/network_security_config"
@@ -50,6 +52,7 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
 
         <activity
             android:name=".MainActivity"
@@ -80,5 +83,16 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Receives GMS Activity Transition API events via PendingIntent (GMS builds only).
+             Declared here so the system can deliver the explicit broadcast even when
+             the app is not running. Harmless on FOSS builds where GMS is excluded. -->
+        <receiver
+            android:name=".ActivityTransitionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.sunstep.travel.ACTIVITY_TRANSITION" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

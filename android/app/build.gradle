@@ -10,6 +10,16 @@ dependencies {
     implementation "androidx.window:window-java:1.4.0"
 }
 
+// Declare GMS dependency only for the gms flavor.
+// afterEvaluate ensures the gmsImplementation configuration already exists.
+afterEvaluate {
+    dependencies {
+        // play-services-location is only compiled into GMS builds.
+        // FOSS builds never see these classes, satisfying F-Droid's scanner.
+        add("gmsImplementation", 'com.google.android.gms:play-services-location:21.3.0')
+    }
+}
+
 def keystorePropertiesFile = rootProject.file("keystore.properties")
 def keystoreProperties = new Properties()
 

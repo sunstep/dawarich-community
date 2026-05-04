@@ -2,12 +2,11 @@ import 'package:dawarich/features/version_check/domain/server_compatibility_stat
 import 'package:dawarich/features/version_check/presentation/server_compatibility_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dawarich/features/version_check/domain/server_compatibility_state.dart';
 
 /// A banner that warns the user when their server/app combination
 /// has compatibility issues.  Renders nothing when everything is OK.
-///
-/// Appears as a floating rounded card with a subtle slide-in animation,
-/// matching the app's card-based design language.
 final class CompatibilityBanner extends ConsumerStatefulWidget {
   const CompatibilityBanner({super.key});
 
@@ -19,9 +18,14 @@ final class CompatibilityBanner extends ConsumerStatefulWidget {
 class _CompatibilityBannerState extends ConsumerState<CompatibilityBanner>
     with SingleTickerProviderStateMixin {
   bool _dismissed = false;
+  bool _prefsLoaded = false;
+  String? _persistedDismissedKey;
+
   late final AnimationController _animController;
   late final Animation<Offset> _slideAnimation;
   late final Animation<double> _fadeAnimation;
+
+  static const String _prefKey = 'compat_banner_dismissed_key';
 
   @override
   void initState() {
@@ -41,8 +45,20 @@ class _CompatibilityBannerState extends ConsumerState<CompatibilityBanner>
       parent: _animController,
       curve: Curves.easeIn,
     );
-    _animController.forward();
+    _loadPrefs();
   }
+
+  Future<void> _loadPrefs() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _persistedDismissedKey = prefs.getString(_prefKey);
+      _prefsLoaded = true;
+    });
+  }
+
+  String _keyForState(ServerCompatibilityState state) =>
+      '${state.serverVersion ?? "unknown"}_${state.status.name}';
 
   @override
   void dispose() {
@@ -51,22 +67,52 @@ class _CompatibilityBannerState extends ConsumerState<CompatibilityBanner>
   }
 
   Future<void> _dismiss() async {
+    final state = ref.read(serverCompatibilityProvider);
+    final key = _keyForState(state);
+
     await _animController.reverse();
-    if (mounted) setState(() => _dismissed = true);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_prefKey, key);
+
+    if (mounted) {
+      setState(() {
+        _dismissed = true;
+        _persistedDismissedKey = key;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_dismissed) return const SizedBox.shrink();
+    if (_dismissed) {
+      return const SizedBox.shrink();
+    }
 
     final state = ref.watch(serverCompatibilityProvider);
-    if (!state.shouldWarn) return const SizedBox.shrink();
+    if (!state.shouldWarn) {
+      return const SizedBox.shrink();
+    }
+
+    if (!_prefsLoaded) {
+      return const SizedBox.shrink();
+    }
+
+    final currentKey = _keyForState(state);
+    if (currentKey == _persistedDismissedKey) {
+      return const SizedBox.shrink();
+    }
+
+    if (_animController.status == AnimationStatus.dismissed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _animController.forward();
+      });
+    }
 
     final bool isIncompatible =
         state.status == ServerCompatibilityStatus.incompatible;
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
-    // ── Colours that respect the app's dark / light themes ──
     final Color accentColor = isIncompatible
         ? (isDark ? Colors.redAccent : Colors.red.shade600)
         : (isDark ? Colors.orangeAccent : Colors.orange.shade700);
@@ -133,7 +179,6 @@ class _CompatibilityBannerState extends ConsumerState<CompatibilityBanner>
                   ),
                   const SizedBox(width: 12),
 
-                  // ── Text content ──
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -161,7 +206,6 @@ class _CompatibilityBannerState extends ConsumerState<CompatibilityBanner>
                   ),
                   const SizedBox(width: 8),
 
-                  // ── Dismiss button ──
                   GestureDetector(
                     onTap: _dismiss,
                     behavior: HitTestBehavior.opaque,

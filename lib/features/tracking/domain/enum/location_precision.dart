@@ -1,4 +1,3 @@
-
 /// Abstract precision levels that are provider-agnostic.
 /// Data layer maps these to Geolocator / platform settings.
 ///
@@ -6,10 +5,11 @@
 /// for backward compatibility with existing database values.
 enum LocationPrecision {
 
-  lowPower(1),   // Was LocationAccuracy.low (index 1)
-  balanced(2),   // Was LocationAccuracy.medium (index 2)
-  high(3),       // Was LocationAccuracy.high (index 3)
-  best(4);       // Was LocationAccuracy.best (index 4)
+  powerSave(0), // LocationAccuracy.lowest — passive accuracy
+  lowPower(1),  // Was LocationAccuracy.low (index 1)
+  balanced(2),  // Was LocationAccuracy.medium (index 2)
+  high(3),      // Was LocationAccuracy.high (index 3)
+  best(4);      // Was LocationAccuracy.best (index 4)
 
   final int code;
   const LocationPrecision(this.code);
@@ -20,7 +20,7 @@ enum LocationPrecision {
         return v;
       }
     }
-    // Default fallback for unknown codes (including old 'lowest' = 0)
+    // Default fallback for unknown codes
     return LocationPrecision.high;
   }
 }

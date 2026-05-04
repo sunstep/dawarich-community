@@ -132,6 +132,8 @@ final class PointValidator {
   double _getAccuracyThreshold(LocationPrecision precision) {
     if (Platform.isIOS) {
       switch (precision) {
+        case LocationPrecision.powerSave:
+          return 3000; // iOS Lowest accuracy (cell-tower)
         case LocationPrecision.lowPower:
           return 1000; // iOS Low accuracy
         case LocationPrecision.balanced:
@@ -143,6 +145,8 @@ final class PointValidator {
       }
     } else {
       switch (precision) {
+        case LocationPrecision.powerSave:
+          return 2000; // Android Lowest power accuracy (cell-tower)
         case LocationPrecision.lowPower:
           return 500; // Android Low power accuracy
         case LocationPrecision.balanced:

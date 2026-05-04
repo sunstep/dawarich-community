@@ -525,6 +525,17 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
       return Err("Location permission 'Always' is required for background tracking.");
     }
 
+    // Request activity recognition for smart passive mode (Activity Transition
+    // API on GMS, TYPE_SIGNIFICANT_MOTION on FOSS). Not strictly required —
+    // tracking still works without it, but battery efficiency is significantly
+    // reduced without motion transition detection.
+    final activityStatus = await Permission.activityRecognition.request();
+    if (kDebugMode) {
+      debugPrint(
+        '[TrackerPageViewModel] Activity recognition permission: $activityStatus',
+      );
+    }
+
     return const Ok(());
   }
 

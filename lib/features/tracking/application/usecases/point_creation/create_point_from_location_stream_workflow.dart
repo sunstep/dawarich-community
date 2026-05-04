@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:dawarich/features/tracking/application/repositories/location_provider_interface.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/get_tracker_settings_usecase.dart';
@@ -12,11 +13,19 @@ import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:option_result/result.dart';
 
-/// Workflow for creating points using either:
-/// - Auto mode (0): Event-driven tracking when location changes meaningfully
-/// - Timer mode (>0): Fixed interval tracking
+/// Produces a stream of [TrackingSample]s for either:
+///
+/// - Auto mode (trackingFrequency == 0): event-driven GPS stream whose
+///   precision, distance filter and interval depend on the current
+///   [AutoTrackingRuntimeMode]:
+///     - passive:  powerSave (PRIORITY_NO_POWER, piggybacks other apps, zero cost)
+///     - monitor:  high accuracy (real GPS, 15 s interval — short-lived transition
+///                 mode; bounded cost ~12 fixes before idle timeout)
+///     - active:   user-configured precision from tracker settings
+///
+/// - Timer mode (trackingFrequency > 0): fixed-interval recording using
+///   a cached location updated by a background stream.
 final class CreatePointFromLocationStreamWorkflow {
-
   final GetTrackerSettingsUseCase _getTrackerSettings;
   final ILocationProvider _locationProvider;
   final CreatePointUseCase _createPointFromLocationFix;
@@ -27,44 +36,35 @@ final class CreatePointFromLocationStreamWorkflow {
     this._createPointFromLocationFix,
   );
 
-  /// Returns a stream of location points based on user settings.
-  /// Returns tracking samples based on user settings.
+  /// Entry point. Reads user settings, then delegates to the appropriate
+  /// sub-stream.
+  ///
+  /// [runtimeMode] is only used in auto mode to select the GPS precision
+  /// and polling parameters. In timer mode it is ignored.
   Stream<TrackingSample> getTrackingSampleStream(
-      int userId, {
-        required AutoTrackingRuntimeMode runtimeMode,
-      }) async* {
+    int userId, {
+    AutoTrackingRuntimeMode runtimeMode = AutoTrackingRuntimeMode.active,
+  }) async* {
     if (kDebugMode) {
       debugPrint('[LocationStream] Starting location stream for user $userId');
     }
 
     final TrackerSettings settings = await _getTrackerSettings(userId);
-    final LocationPrecision precision = settings.locationPrecision;
-    final int trackingFrequencySeconds = settings.trackingFrequency;
-    final int minimumDistance = settings.minimumPointDistance;
-    final bool isAutoMode = trackingFrequencySeconds == 0;
+    final bool isAutoMode = settings.trackingFrequency == 0;
 
     if (kDebugMode) {
       debugPrint(
-        '[LocationStream] Settings: precision=$precision, '
-            'frequency=${trackingFrequencySeconds}s, '
-            'minDistance=${minimumDistance}m, autoMode=$isAutoMode',
+        '[LocationStream] Settings: precision=${settings.locationPrecision}, '
+        'frequency=${settings.trackingFrequency}s, '
+        'minDistance=${settings.minimumPointDistance}m, '
+        'autoMode=$isAutoMode, runtimeMode=$runtimeMode',
       );
     }
 
     if (isAutoMode) {
-      yield* _getAutoModeTrackingSampleStream(
-        userId,
-        precision,
-        minimumDistance,
-        runtimeMode
-      );
+      yield* _autoModeStream(userId, settings, runtimeMode);
     } else {
-      yield* _getTimerModeTrackingSampleStream(
-        userId,
-        precision,
-        minimumDistance,
-        trackingFrequencySeconds,
-      );
+      yield* _timerModeStream(userId, settings);
     }
 
     if (kDebugMode) {
@@ -72,100 +72,40 @@ final class CreatePointFromLocationStreamWorkflow {
     }
   }
 
-  LocationPrecision _getPassivePrecision(LocationPrecision precision) {
-    return switch (precision) {
-      LocationPrecision.best => LocationPrecision.balanced,
-      LocationPrecision.high => LocationPrecision.balanced,
-      LocationPrecision.balanced => LocationPrecision.lowPower,
-      LocationPrecision.lowPower => LocationPrecision.lowPower,
-    };
-  }
+  // Auto mode
 
-  int _getAutoModeDistanceFilter(
-      LocationPrecision precision,
-      int minimumDistance,
-      AutoTrackingRuntimeMode runtimeMode,
-      ) {
-    final baseDistanceFilter = minimumDistance > 0
-        ? minimumDistance
-        : switch (precision) {
-      LocationPrecision.best => 10,
-      LocationPrecision.high => 10,
-      LocationPrecision.balanced => 25,
-      LocationPrecision.lowPower => 50,
-    };
+  /// Auto mode stream. Emits a sample whenever the device moves enough to
+  /// pass the point-recording threshold, or at most once per interval.
+  ///
+  /// GPS precision and polling are determined by runtimeMode:
+  ///   - passive:  powerSave, 120 s interval, 150 m record distance
+  ///   - monitor:  high accuracy (real GPS), no OS filter, 15 s interval, 30 m record distance
+  ///   - active:   user-configured precision with standard filters
+  Stream<TrackingSample> _autoModeStream(
+    int userId,
+    TrackerSettings settings,
+    AutoTrackingRuntimeMode runtimeMode,
+  ) async* {
+    // Safety guard removed: passive mode now uses a PRIORITY_NO_POWER fallback stream.
 
-    if (runtimeMode == AutoTrackingRuntimeMode.active) {
-      return baseDistanceFilter;
-    }
-
-    return baseDistanceFilter < 50 ? 50 : baseDistanceFilter;
-  }
-
-  Duration _getAutoModeInterval(
-      LocationPrecision precision,
-      int minimumDistance,
-      AutoTrackingRuntimeMode runtimeMode,
-      ) {
-    final baseInterval = minimumDistance >= 100
-        ? const Duration(seconds: 30)
-        : switch (precision) {
-      LocationPrecision.best => const Duration(seconds: 10),
-      LocationPrecision.high => const Duration(seconds: 10),
-      LocationPrecision.balanced => const Duration(seconds: 15),
-      LocationPrecision.lowPower => const Duration(seconds: 30),
-    };
-
-    if (runtimeMode == AutoTrackingRuntimeMode.active) {
-      return baseInterval;
-    }
-
-    // Passive mode: poll GPS much less frequently.  The MotionDetectorService
-    // watches the accelerometer at near-zero battery cost and triggers an
-    // immediate one-shot fix when sustained motion is detected, so the 60 s
-    // interval here is just a periodic heartbeat — real wakeups come from
-    // the sensor.
-    return const Duration(seconds: 60);
-  }
-
-  /// Auto mode: track when the device has moved a meaningful distance.
-  /// Uses user's minimum distance if set, otherwise derives from precision setting.
-  Stream<TrackingSample> _getAutoModeTrackingSampleStream(
-      int userId,
-      LocationPrecision precision,
-      int minimumDistance,
-      AutoTrackingRuntimeMode runtimeMode,
-      ) async* {
-
-    final effectivePrecision = runtimeMode == AutoTrackingRuntimeMode.active
-        ? precision
-        : _getPassivePrecision(precision);
-
-    final distanceFilter = _getAutoModeDistanceFilter(
-      precision,
-      minimumDistance,
-      runtimeMode,
-    );
-
-    final autoInterval = _getAutoModeInterval(
-      precision,
-      minimumDistance,
-      runtimeMode,
-    );
+    final precision = _precisionForMode(runtimeMode, settings.locationPrecision);
+    final minDistance = settings.minimumPointDistance;
+    final distanceFilter = _distanceFilterForMode(runtimeMode, precision, minDistance);
+    final recordDistance = _recordDistanceForMode(runtimeMode, precision, minDistance);
+    final interval = _intervalForMode(runtimeMode, precision, minDistance);
 
     final request = LocationRequest(
-      precision: effectivePrecision,
+      precision: precision,
       distanceFilterMeters: distanceFilter,
       timeLimit: null,
-      intervalDuration: autoInterval,
+      intervalDuration: interval,
     );
 
     if (kDebugMode) {
       debugPrint(
-        '[LocationStream] Auto mode ($runtimeMode): '
-            'precision=$effectivePrecision, '
-            'distance filter=${distanceFilter}m, '
-            'interval=${autoInterval.inSeconds}s',
+        '[LocationStream] Auto ($runtimeMode): precision=$precision, '
+        'distanceFilter=${distanceFilter}m, recordDistance=${recordDistance}m, '
+        'interval=${interval.inSeconds}s',
       );
     }
 
@@ -173,248 +113,237 @@ final class CreatePointFromLocationStreamWorkflow {
     bool isFirstPoint = true;
 
     try {
-      final locationStream = _locationProvider.getLocationStream(request);
+      await for (final fix in _locationProvider.getLocationStream(request)) {
+        // Use recordDistance (not distanceFilter) to avoid spamming low-quality
+        // points on every periodic poll in passive/monitor modes.
+        final bool shouldRecord =
+            isFirstPoint || _shouldRecordPoint(lastRecordedFix, fix, recordDistance);
 
-      await for (final fix in locationStream) {
-        final bool shouldAttemptPoint = isFirstPoint ||
-            _shouldRecordPoint(lastRecordedFix, fix, distanceFilter);
+        final wasFirst = isFirstPoint;
+        if (isFirstPoint) isFirstPoint = false;
 
-        final wasFirstPoint = isFirstPoint;
-
-        if (isFirstPoint) {
-          isFirstPoint = false;
-        }
-
-        if (shouldAttemptPoint) {
+        if (shouldRecord) {
           if (kDebugMode) {
             debugPrint(
-              wasFirstPoint
-                  ? '[LocationStream] Auto: Recording initial location'
-                  : '[LocationStream] Auto: Recording new location',
+              wasFirst
+                  ? '[LocationStream] Auto: Recording initial fix'
+                  : '[LocationStream] Auto: Recording new fix',
             );
           }
 
-          final timestamp = DateTime.now().toUtc();
-          final pointResult = await _createPointFromLocationFix(
+          final result = await _createPointFromLocationFix(
             fix,
-            timestamp,
+            DateTime.now().toUtc(),
             userId,
           );
 
-          if (pointResult case Ok()) {
+          if (result case Ok()) {
             lastRecordedFix = fix;
-          } else if (pointResult case Err(value: final err)) {
+          } else if (result case Err(value: final err)) {
             if (kDebugMode) {
               debugPrint('[LocationStream] Point creation failed: $err');
             }
           }
 
-          yield TrackingSample(
-            fix: fix,
-            pointResult: pointResult,
-          );
-          continue;
+          yield TrackingSample(fix: fix, pointResult: result);
+        } else {
+          if (kDebugMode) {
+            debugPrint('[LocationStream] Auto: Skipping similar location');
+          }
+          yield TrackingSample(fix: fix, pointResult: null);
         }
-
-        if (kDebugMode) {
-          debugPrint('[LocationStream] Auto: Skipping similar location');
-        }
-
-        yield TrackingSample(
-          fix: fix,
-          pointResult: null,
-        );
       }
     } catch (e, s) {
-      if (kDebugMode) {
-        debugPrint('[LocationStream] Auto mode error: $e\n$s');
-      }
+      if (kDebugMode) debugPrint('[LocationStream] Auto mode error: $e\n$s');
     }
   }
 
-  /// Check if we should record this point (new location or periodic stationary update).
-  bool _shouldRecordPoint(
-      LocationFix? last,
-      LocationFix current,
-      int minDistMeters,
-      ) {
-    if (last == null) {
-      return true;
-    }
+  // Mode-aware GPS parameters
 
-    final dist = Geolocator.distanceBetween(
-      last.latitude,
-      last.longitude,
-      current.latitude,
-      current.longitude,
-    );
-
-    if (dist >= minDistMeters) {
-      return true;
-    }
-
-    final timeDiff =
-        current.timestampUtc.difference(last.timestampUtc).inSeconds;
-
-    return timeDiff > 60;
+  LocationPrecision _precisionForMode(
+    AutoTrackingRuntimeMode mode,
+    LocationPrecision userPrecision,
+  ) {
+    return switch (mode) {
+      AutoTrackingRuntimeMode.passive => LocationPrecision.powerSave,
+      AutoTrackingRuntimeMode.monitor => LocationPrecision.high,
+      AutoTrackingRuntimeMode.active => userPrecision,
+    };
   }
 
-  /// Timer mode: emit points at fixed intervals using cached location.
-  Stream<TrackingSample> _getTimerModeTrackingSampleStream(
-      int userId,
-      LocationPrecision precision,
-      int minimumDistance,
-      int frequencySeconds,
-      ) async* {
+  int _distanceFilterForMode(
+    AutoTrackingRuntimeMode mode,
+    LocationPrecision precision,
+    int minDistance,
+  ) {
+    return switch (mode) {
+      AutoTrackingRuntimeMode.passive => 0,
+      AutoTrackingRuntimeMode.monitor => 0,
+      AutoTrackingRuntimeMode.active => _distanceFilter(precision, minDistance),
+    };
+  }
+
+  Duration _intervalForMode(
+    AutoTrackingRuntimeMode mode,
+    LocationPrecision precision,
+    int minDistance,
+  ) {
+    return switch (mode) {
+      AutoTrackingRuntimeMode.passive => const Duration(seconds: 120), // unused
+      AutoTrackingRuntimeMode.monitor => const Duration(seconds: 15),
+      AutoTrackingRuntimeMode.active => _interval(precision, minDistance),
+    };
+  }
+
+  int _recordDistanceForMode(
+    AutoTrackingRuntimeMode mode,
+    LocationPrecision precision,
+    int minDistance,
+  ) {
+    return switch (mode) {
+      AutoTrackingRuntimeMode.passive => math.max(minDistance, 150),
+      AutoTrackingRuntimeMode.monitor => math.max(minDistance, 30),
+      AutoTrackingRuntimeMode.active => _distanceFilter(precision, minDistance),
+    };
+  }
+
+  /// Distance filter (metres) for active mode.
+  int _distanceFilter(LocationPrecision precision, int minDistance) {
+    if (minDistance > 0) return minDistance;
+    return switch (precision) {
+      LocationPrecision.best => 10,
+      LocationPrecision.high => 10,
+      LocationPrecision.balanced => 25,
+      LocationPrecision.lowPower => 50,
+      LocationPrecision.powerSave => 150,
+    };
+  }
+
+  /// Minimum OS-level delivery interval for active mode.
+  Duration _interval(LocationPrecision precision, int minDistance) {    if (minDistance >= 100) return const Duration(seconds: 30);
+    return switch (precision) {
+      LocationPrecision.best => const Duration(seconds: 10),
+      LocationPrecision.high => const Duration(seconds: 10),
+      LocationPrecision.balanced => const Duration(seconds: 15),
+      LocationPrecision.lowPower => const Duration(seconds: 30),
+      LocationPrecision.powerSave => const Duration(seconds: 90),
+    };
+  }
+
+  // Timer mode
+
+  /// Timer mode: records a point at a fixed [frequencySeconds] interval,
+  /// using the most recent location cached by a background stream.
+  Stream<TrackingSample> _timerModeStream(
+    int userId,
+    TrackerSettings settings,
+  ) async* {
+    final precision = settings.locationPrecision;
+    final minDistance = settings.minimumPointDistance;
+    final frequencySeconds = settings.trackingFrequency;
+
     LocationFix? latestFix;
     StreamSubscription<LocationFix>? locationSub;
     Timer? periodicTimer;
     final controller = StreamController<TrackingSample>();
 
-    final int minSeconds = 1;
-    final int intervalSeconds =
-    (frequencySeconds / 2).ceil().clamp(minSeconds, frequencySeconds);
-
-    final intervalDuration = Duration(seconds: intervalSeconds);
-    final staleMax = _getTimerModeStaleMax(frequencySeconds);
+    // Cache stream runs at half the record interval so the fix is always reasonably fresh.
+    final cacheInterval = Duration(
+      seconds: (frequencySeconds / 2).ceil().clamp(1, frequencySeconds),
+    );
+    final staleMax = _staleMax(frequencySeconds);
 
     final request = LocationRequest(
       precision: precision,
-      distanceFilterMeters: minimumDistance,
+      distanceFilterMeters: minDistance,
       timeLimit: null,
-      intervalDuration: intervalDuration,
+      intervalDuration: cacheInterval,
     );
 
     try {
-      final locationStream = _locationProvider.getLocationStream(request);
-
-      locationSub = locationStream.listen(
-            (fix) {
+      locationSub = _locationProvider.getLocationStream(request).listen(
+        (fix) {
           latestFix = fix;
-
           if (kDebugMode) {
-            debugPrint(
-              '[LocationStream] Cache updated: ${fix.latitude}, ${fix.longitude}',
-            );
+            debugPrint('[LocationStream] Cache updated: ${fix.latitude}, ${fix.longitude}');
           }
         },
         onError: (e) {
-          if (kDebugMode) {
-            debugPrint('[LocationStream] Stream error: $e');
-          }
+          if (kDebugMode) debugPrint('[LocationStream] Cache stream error: $e');
         },
       );
 
+      // Seed the cache immediately so the first timer tick always has data.
       final initialResult = await _locationProvider.getCurrent(request);
-
       if (initialResult case Ok(value: final fix)) {
         latestFix = fix;
-
-        final timestamp = DateTime.now().toUtc();
-        final pointResult = await _createPointFromLocationFix(
+        final result = await _createPointFromLocationFix(
           fix,
-          timestamp,
+          DateTime.now().toUtc(),
           userId,
         );
-
-        if (pointResult case Err(value: final err)) {
-          if (kDebugMode) {
-            debugPrint('[LocationStream] Initial point creation failed: $err');
-          }
+        if (result case Err(value: final err)) {
+          if (kDebugMode) debugPrint('[LocationStream] Initial point creation failed: $err');
         }
-
-        controller.add(
-          TrackingSample(
-            fix: fix,
-            pointResult: pointResult,
-          ),
-        );
+        controller.add(TrackingSample(fix: fix, pointResult: result));
       }
-
-      final timerDuration = Duration(seconds: frequencySeconds);
 
       if (kDebugMode) {
         debugPrint(
-          '[LocationStream] Timer mode: interval = ${frequencySeconds}s, '
-              'staleMax = ${staleMax.inSeconds}s',
+          '[LocationStream] Timer mode: interval=${frequencySeconds}s, '
+          'staleMax=${staleMax.inSeconds}s',
         );
       }
 
-      periodicTimer = Timer.periodic(timerDuration, (timer) async {
+      periodicTimer = Timer.periodic(Duration(seconds: frequencySeconds), (timer) async {
         if (controller.isClosed) {
           timer.cancel();
           return;
         }
 
-        final fixToUse = latestFix;
-
-        if (fixToUse == null) {
-          if (kDebugMode) {
-            debugPrint('[LocationStream] No cached fix yet, skipping timer tick');
-          }
+        final fix = latestFix;
+        if (fix == null) {
+          if (kDebugMode) debugPrint('[LocationStream] No cached fix yet, skipping tick');
           return;
         }
 
-        final age = DateTime.now().toUtc().difference(fixToUse.timestampUtc);
-
+        final age = DateTime.now().toUtc().difference(fix.timestampUtc);
         if (age < Duration.zero || age > staleMax) {
           if (kDebugMode) {
             debugPrint(
-              '[LocationStream] Cached fix too stale for timer tick '
-                  '(age: ${age.inSeconds}s, max: ${staleMax.inSeconds}s), skipping',
+              '[LocationStream] Cached fix too stale '
+              '(age: ${age.inSeconds}s, max: ${staleMax.inSeconds}s)',
             );
           }
-
-          controller.add(
-            TrackingSample(
-              fix: fixToUse,
-              pointResult: Err(
-                'Cached location too stale (age: ${age.inSeconds}s)',
-              ),
-            ),
-          );
+          controller.add(TrackingSample(
+            fix: fix,
+            pointResult: Err('Cached location too stale (age: ${age.inSeconds}s)'),
+          ));
           return;
         }
 
         try {
-          final timestamp = DateTime.now().toUtc();
-          final pointResult = await _createPointFromLocationFix(
-            fixToUse,
-            timestamp,
+          final result = await _createPointFromLocationFix(
+            fix,
+            DateTime.now().toUtc(),
             userId,
           );
-
-          if (pointResult case Err(value: final err)) {
-            if (kDebugMode) {
-              debugPrint('[LocationStream] Point validation failed: $err');
-            }
+          if (result case Err(value: final err)) {
+            if (kDebugMode) debugPrint('[LocationStream] Point validation failed: $err');
           }
-
-          controller.add(
-            TrackingSample(
-              fix: fixToUse,
-              pointResult: pointResult,
-            ),
-          );
+          controller.add(TrackingSample(fix: fix, pointResult: result));
         } catch (e) {
-          if (kDebugMode) {
-            debugPrint('[LocationStream] Error creating point: $e');
-          }
-
-          controller.add(
-            TrackingSample(
-              fix: fixToUse,
-              pointResult: Err('Failed to create point: $e'),
-            ),
-          );
+          if (kDebugMode) debugPrint('[LocationStream] Error creating point: $e');
+          controller.add(TrackingSample(
+            fix: fix,
+            pointResult: Err('Failed to create point: $e'),
+          ));
         }
       });
 
       yield* controller.stream;
     } catch (e, s) {
-      if (kDebugMode) {
-        debugPrint('[LocationStream] Timer error: $e\n$s');
-      }
+      if (kDebugMode) debugPrint('[LocationStream] Timer mode error: $e\n$s');
     } finally {
       periodicTimer?.cancel();
       await locationSub?.cancel();
@@ -422,9 +351,32 @@ final class CreatePointFromLocationStreamWorkflow {
     }
   }
 
-  Duration _getTimerModeStaleMax(int frequencySeconds) {
-    return Duration(
-      seconds: (frequencySeconds * 2).clamp(30, 300),
+  /// Maximum acceptable age for a cached fix before it is considered stale.
+  Duration _staleMax(int frequencySeconds) =>
+      Duration(seconds: (frequencySeconds * 2).clamp(30, 300));
+
+  // Shared helpers
+
+  /// Returns `true` if [current] is far enough or old enough from [last] to
+  /// justify recording a new point.
+  bool _shouldRecordPoint(
+    LocationFix? last,
+    LocationFix current,
+    int minDistMeters,
+  ) {
+    if (last == null) {
+      return true;
+    }
+
+    final dist = Geolocator.distanceBetween(
+      last.latitude, last.longitude,
+      current.latitude, current.longitude,
     );
+
+    if (dist >= minDistMeters) {
+      return true;
+    }
+
+    return current.timestampUtc.difference(last.timestampUtc).inSeconds > 60;
   }
 }

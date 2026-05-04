@@ -1,0 +1,14 @@
+name: flutter_activity_recognition
+description: >
+  Stub implementation of flutter_activity_recognition for FOSS builds.
+  Returns an empty stream so the package import compiles without pulling in
+  any Google Play Services classes.
+version: 4.0.0
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+

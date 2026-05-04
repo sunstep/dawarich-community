@@ -18,7 +18,6 @@ import 'package:dawarich/features/stats/data/sources/local/stats_local_data_sour
 import 'package:dawarich/features/stats/data/sources/remote/stats_remote_data_source.dart';
 import 'package:dawarich/features/stats/presentation/converters/countries_mapper.dart';
 import 'package:dawarich/features/tracking/application/repositories/location_provider_interface.dart';
-import 'package:dawarich/features/tracking/application/services/motion_detector_service.dart';
 import 'package:dawarich/features/tracking/application/services/tracker_intelligence_service.dart';
 import 'package:dawarich/features/tracking/application/services/tracking_notification_service.dart';
 import 'package:dawarich/features/tracking/application/usecases/notifications/cancel_tracker_notification_usecase.dart';
@@ -26,6 +25,7 @@ import 'package:dawarich/features/tracking/application/usecases/notifications/in
 import 'package:dawarich/features/tracking/application/usecases/notifications/was_launched_from_notification_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_usecase.dart';
 import 'package:dawarich/features/tracking/data/repositories/location_provider.dart';
+import 'package:dawarich/features/tracking/data/sources/activity_transition_data_client.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core_providers.dart';
 import 'settings_providers.dart';
@@ -94,10 +94,18 @@ final statsRepositoryProvider = FutureProvider<IStatsRepository>((ref) async {
   return StatsRepository(remote: remote, cache: cache);
 });
 // --- Tracking repositories ---
+final activityTransitionDataClientProvider = Provider<ActivityTransitionDataClient>((ref) {
+  final client = ActivityTransitionDataClient();
+  client.initialize();
+  ref.onDispose(client.dispose);
+  return client;
+});
+
 final hardwareRepositoryProvider = Provider<IHardwareRepository>((ref) {
   return HardwareRepository(
     ref.watch(deviceDataClientProvider),
     ref.watch(connectivityDataClientProvider),
+    ref.watch(activityTransitionDataClientProvider),
   );
 });
 
@@ -271,12 +279,6 @@ final trackerIntelligenceServiceProvider = FutureProvider<TrackerIntelligenceSer
   return TrackerIntelligenceService();
 });
 
-final motionDetectorServiceProvider = Provider<MotionDetectorService>((ref) {
-  final service = MotionDetectorService();
-  ref.onDispose(service.dispose);
-  return service;
-});
-
 final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((ref) async {
   final createStream = await ref.watch(createPointFromLocationStreamWorkflowProvider.future);
   final storePoint = await ref.watch(storePointUseCaseProvider.future);
@@ -290,7 +292,7 @@ final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((r
 
   final trackerIntelligenceService = await ref.watch(trackerIntelligenceServiceProvider.future);
   final hardwareRepo = ref.watch(hardwareRepositoryProvider);
-  final motionDetector = ref.watch(motionDetectorServiceProvider);
+  final locationProvider = ref.watch(locationProviderProvider);
 
   return PointAutomationService(
     createStream,
@@ -303,7 +305,7 @@ final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((r
     localRepo,
     trackerIntelligenceService,
     hardwareRepo,
-    motionDetector,
+    locationProvider,
   );
 });
 
