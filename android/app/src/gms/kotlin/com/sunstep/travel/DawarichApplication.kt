@@ -5,37 +5,56 @@ import android.app.PendingIntent
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import org.json.JSONObject
+import java.io.File
 
 /**
- * Custom Application class for GMS builds.
+ * GMS build Application class.
  *
- * Registers the GMS Activity Transition API once at process start so that
- * locomotion ENTER events are delivered to ActivityTransitionReceiver via
- * PendingIntent even when the app is killed. Done here rather than inside a
- * Flutter plugin to avoid plugin-registration race conditions in the background
- * engine.
+ * Base layer: MotionSensorManager provides the same sensor-based locomotion
+ * detection as the FOSS build.
+ *
+ * GMS bonus: the Activity Transition API additionally registers locomotion ENTER
+ * events. When Play Services confirm movement they also write the transition file,
+ * giving faster detection on top of the sensor layer.
  */
 class DawarichApplication : Application() {
 
     companion object {
         private const val TAG = "DawarichApplication"
-
-        /**
-         * Request code for the Activity Transition PendingIntent.
-         * Using a distinct value from flutter_activity_recognition (which uses 0)
-         * avoids PendingIntent collisions.
-         */
         private const val TRANSITION_PENDING_INTENT_CODE = 1001
     }
 
+    private lateinit var motionSensorManager: MotionSensorManager
+
     override fun onCreate() {
         super.onCreate()
+
+        motionSensorManager = MotionSensorManager(
+            context = this,
+            onLocomotionConfirmed = { writeTransitionFile(activityType = -1) },
+        )
+        motionSensorManager.arm()
+
         registerActivityTransitions()
+    }
+
+    private fun writeTransitionFile(activityType: Int) {
+        try {
+            val json = JSONObject().apply {
+                put("timestamp", System.currentTimeMillis())
+                put("activityType", activityType)
+            }
+            File(filesDir, MotionSensorManager.TRANSITION_FILE).writeText(json.toString())
+            Log.d(TAG, "Transition file written (activityType=$activityType)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to write transition file: ${e.message}")
+        }
     }
 
     /**
      * Registers locomotion ENTER transitions with the GMS Activity Transition API.
-     * Results are delivered to ActivityTransitionReceiver via PendingIntent.
+     * Results are delivered to [ActivityTransitionReceiver] via PendingIntent.
      */
     private fun registerActivityTransitions() {
         try {
@@ -57,7 +76,6 @@ class DawarichApplication : Application() {
 
             val request = com.google.android.gms.location.ActivityTransitionRequest(transitions)
 
-            // Explicit intent targeting our BroadcastReceiver.
             val intent = Intent(this, ActivityTransitionReceiver::class.java).apply {
                 action = "com.sunstep.travel.ACTIVITY_TRANSITION"
             }
@@ -74,15 +92,14 @@ class DawarichApplication : Application() {
             com.google.android.gms.location.ActivityRecognition.getClient(this)
                 .requestActivityTransitionUpdates(request, pendingIntent)
                 .addOnSuccessListener {
-                    Log.d(TAG, "Activity Transition API registered successfully")
+                    Log.d(TAG, "GMS Activity Transition API registered successfully")
                 }
                 .addOnFailureListener { e ->
-                    Log.w(TAG, "Failed to register Activity Transition API: ${e.message}")
+                    Log.w(TAG, "GMS Activity Transition registration failed: ${e.message}")
                 }
 
         } catch (e: Throwable) {
-            // Defensive: catches any unexpected runtime failure in GMS registration.
-            Log.w(TAG, "Activity Transition registration failed unexpectedly: ${e.message}")
+            Log.w(TAG, "GMS Activity Transition registration failed unexpectedly: ${e.message}")
         }
     }
 }

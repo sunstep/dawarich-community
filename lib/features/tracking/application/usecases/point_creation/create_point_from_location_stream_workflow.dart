@@ -19,7 +19,8 @@ import 'package:option_result/result.dart';
 ///   precision, distance filter and interval depend on the current
 ///   [AutoTrackingRuntimeMode]:
 ///     - passive:  powerSave (PRIORITY_NO_POWER, piggybacks other apps, zero cost)
-///     - monitor:  balanced (PRIORITY_BALANCED, cell + WiFi, ~20-100 m)
+///     - monitor:  high accuracy (real GPS, 15 s interval — short-lived transition
+///                 mode; bounded cost ~12 fixes before idle timeout)
 ///     - active:   user-configured precision from tracker settings
 ///
 /// - Timer mode (trackingFrequency > 0): fixed-interval recording using
@@ -78,7 +79,7 @@ final class CreatePointFromLocationStreamWorkflow {
   ///
   /// GPS precision and polling are determined by runtimeMode:
   ///   - passive:  powerSave, 120 s interval, 150 m record distance
-  ///   - monitor:  balanced (cell + WiFi), no OS filter, 10 s interval
+  ///   - monitor:  high accuracy (real GPS), no OS filter, 15 s interval, 30 m record distance
   ///   - active:   user-configured precision with standard filters
   Stream<TrackingSample> _autoModeStream(
     int userId,
@@ -159,28 +160,17 @@ final class CreatePointFromLocationStreamWorkflow {
 
   // Mode-aware GPS parameters
 
-  /// Maps the runtime mode to the appropriate [LocationPrecision].
-  ///
-  /// Passive uses powerSave (PRIORITY_NO_POWER, piggybacks other apps).
-  /// Monitor uses balanced (cell + WiFi, no GPS chip).
-  /// Active uses whatever the user configured.
   LocationPrecision _precisionForMode(
     AutoTrackingRuntimeMode mode,
     LocationPrecision userPrecision,
   ) {
     return switch (mode) {
       AutoTrackingRuntimeMode.passive => LocationPrecision.powerSave,
-      AutoTrackingRuntimeMode.monitor => LocationPrecision.balanced,
+      AutoTrackingRuntimeMode.monitor => LocationPrecision.high,
       AutoTrackingRuntimeMode.active => userPrecision,
     };
   }
 
-  /// OS-level distance filter per runtime mode.
-  ///
-  /// Passive and monitor both use 0 (disabled). At cell/WiFi accuracy
-  /// (50-500 m), a small distance filter is counterproductive because position
-  /// noise alone can exceed it. Time-based delivery handles both modes instead.
-  /// Point recording uses a separate higher threshold from _recordDistanceForMode.
   int _distanceFilterForMode(
     AutoTrackingRuntimeMode mode,
     LocationPrecision precision,
@@ -193,9 +183,6 @@ final class CreatePointFromLocationStreamWorkflow {
     };
   }
 
-  /// OS delivery interval per runtime mode.
-  /// Monitor uses 10 s for quick stop/go detection.
-  /// Passive interval is listed for completeness but the stream is rarely active.
   Duration _intervalForMode(
     AutoTrackingRuntimeMode mode,
     LocationPrecision precision,
@@ -203,18 +190,11 @@ final class CreatePointFromLocationStreamWorkflow {
   ) {
     return switch (mode) {
       AutoTrackingRuntimeMode.passive => const Duration(seconds: 120), // unused
-      AutoTrackingRuntimeMode.monitor => const Duration(seconds: 10),
+      AutoTrackingRuntimeMode.monitor => const Duration(seconds: 15),
       AutoTrackingRuntimeMode.active => _interval(precision, minDistance),
     };
   }
 
-  /// Minimum displacement to record a new point, separate from the OS distance filter.
-  /// Prevents passive/monitor from flooding the database with low-quality
-  /// cell-tower points on every poll.
-  ///
-  ///   - Passive:  max(userMin, 150 m)
-  ///   - Monitor:  max(userMin,  50 m)
-  ///   - Active:   same as the OS distance filter
   int _recordDistanceForMode(
     AutoTrackingRuntimeMode mode,
     LocationPrecision precision,
@@ -222,12 +202,12 @@ final class CreatePointFromLocationStreamWorkflow {
   ) {
     return switch (mode) {
       AutoTrackingRuntimeMode.passive => math.max(minDistance, 150),
-      AutoTrackingRuntimeMode.monitor => math.max(minDistance, 50),
+      AutoTrackingRuntimeMode.monitor => math.max(minDistance, 30),
       AutoTrackingRuntimeMode.active => _distanceFilter(precision, minDistance),
     };
   }
 
-  /// Distance filter (metres) for active mode (user-configured).
+  /// Distance filter (metres) for active mode.
   int _distanceFilter(LocationPrecision precision, int minDistance) {
     if (minDistance > 0) return minDistance;
     return switch (precision) {
@@ -240,8 +220,7 @@ final class CreatePointFromLocationStreamWorkflow {
   }
 
   /// Minimum OS-level delivery interval for active mode.
-  Duration _interval(LocationPrecision precision, int minDistance) {
-    if (minDistance >= 100) return const Duration(seconds: 30);
+  Duration _interval(LocationPrecision precision, int minDistance) {    if (minDistance >= 100) return const Duration(seconds: 30);
     return switch (precision) {
       LocationPrecision.best => const Duration(seconds: 10),
       LocationPrecision.high => const Duration(seconds: 10),
@@ -385,14 +364,18 @@ final class CreatePointFromLocationStreamWorkflow {
     LocationFix current,
     int minDistMeters,
   ) {
-    if (last == null) return true;
+    if (last == null) {
+      return true;
+    }
 
     final dist = Geolocator.distanceBetween(
       last.latitude, last.longitude,
       current.latitude, current.longitude,
     );
 
-    if (dist >= minDistMeters) return true;
+    if (dist >= minDistMeters) {
+      return true;
+    }
 
     return current.timestampUtc.difference(last.timestampUtc).inSeconds > 60;
   }

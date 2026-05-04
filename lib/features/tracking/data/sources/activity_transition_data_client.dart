@@ -6,21 +6,13 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// Client for receiving activity recognition events.
+/// Receives activity recognition events via two parallel paths:
 ///
-/// Two parallel paths feed the same broadcast stream:
+/// GMS path: subscribes to the flutter_activity_recognition plugin stream.
+/// File path: polls activity_transition_event.json written to the app support
+/// directory. Works on both flavors; sole active path on FOSS.
 ///
-///   GMS path: flutter_activity_recognition plugin subscribes to the GMS
-///   ActivityRecognitionClient stream. Works on GMS builds when Google Play
-///   Services are present.
-///
-///   File poll path: polls activity_transition_event.json written to the app's
-///   support directory. On GMS builds the file is written by
-///   ActivityTransitionReceiver (via PendingIntent). On FOSS builds it is
-///   written by DawarichApplication when TYPE_SIGNIFICANT_MOTION fires. This
-///   path works on both flavors and is the sole active path on FOSS.
-///
-/// Whichever path detects motion first emits the wake event. Duplicate events
+/// Whichever path detects motion first emits the event. Duplicate events
 /// within a short window are deduplicated by timestamp.
 final class ActivityTransitionDataClient {
   final FlutterActivityRecognition _recognition =
@@ -78,8 +70,7 @@ final class ActivityTransitionDataClient {
         },
       );
     } catch (e) {
-      // receiveBroadcastStream() can throw MissingPluginException synchronously
-      // if the native handler is not registered yet (FOSS builds, background engine).
+      // receiveBroadcastStream() can throw synchronously on FOSS builds.
       debugPrint('[ActivityRecognition] Subscribe failed: $e');
       _scheduleRetry(attempt);
     }
@@ -89,12 +80,12 @@ final class ActivityTransitionDataClient {
     if (attempt >= _maxRetries) {
       debugPrint(
         '[ActivityRecognition] Plugin stream unavailable after $attempt retries. '
-        'Relying on file-poll path (FOSS / fallback).',
+        'Relying on file-poll path.',
       );
       return;
     }
 
-    final delaySec = 2 * (1 << attempt); // 2, 4, 8, 16, 32 seconds
+    final delaySec = 2 * (1 << attempt);
     debugPrint(
       '[ActivityRecognition] Retrying plugin stream in ${delaySec}s '
       '(attempt ${attempt + 2}/${_maxRetries + 1})',
@@ -102,14 +93,16 @@ final class ActivityTransitionDataClient {
 
     _retryTimer?.cancel();
     _retryTimer = Timer(Duration(seconds: delaySec), () {
-      if (_controller.isClosed) return;
+      if (_controller.isClosed) {
+        return;
+      }
       _subscribe(attempt: attempt + 1);
     });
   }
 
   void _startFilePoll() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollTransitionFile();
     });
   }
@@ -118,7 +111,9 @@ final class ActivityTransitionDataClient {
     try {
       final dir = await getApplicationSupportDirectory();
       final file = File('${dir.path}/$_transitionFileName');
-      if (!file.existsSync()) return;
+      if (!file.existsSync()) {
+        return;
+      }
 
       final content = file.readAsStringSync();
       final json = jsonDecode(content) as Map<String, dynamic>;
@@ -134,12 +129,11 @@ final class ActivityTransitionDataClient {
         }
       }
     } catch (_) {
-      // File may not exist yet or be temporarily unreadable during a write.
+      // File may not exist yet or may be mid-write.
     }
   }
 
-  /// Returns a broadcast stream that emits a void event whenever the OS
-  /// detects significant locomotion (walking, running, cycling, driving).
+  /// Returns a broadcast stream that emits whenever locomotion is detected.
   Stream<void> watchTransitions() {
     if (!_started) {
       initialize();
@@ -149,7 +143,6 @@ final class ActivityTransitionDataClient {
     return _controller.stream;
   }
 
-  /// Cleans up both the plugin subscription and the file-poll timer.
   void dispose() {
     _retryTimer?.cancel();
     _retryTimer = null;

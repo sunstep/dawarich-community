@@ -5,6 +5,7 @@ import 'package:dawarich/core/di/providers/drawer_providers.dart';
 import 'package:dawarich/core/shell/drawer/drawer_viewmodel.dart';
 import 'package:dawarich/core/theme/app_gradients.dart';
 import 'package:dawarich/features/version_check/domain/server_compatibility_status.dart';
+import 'package:dawarich/features/version_check/domain/server_compatibility_state.dart';
 import 'package:dawarich/features/version_check/presentation/server_compatibility_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:dawarich/core/routing/app_router.dart';
@@ -66,11 +67,15 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
   }
 
   void _closeDrawer(BuildContext context) {
-    if (Navigator.canPop(context)) Navigator.pop(context);
+    if (Navigator.canPop(context)) {
+      Navigator.pop(context);
+    }
   }
 
   void _runNavGuarded(Future<void> Function() action) {
-    if (_isNavigating) return;
+    if (_isNavigating) {
+      return;
+    }
     _isNavigating = true;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
@@ -85,7 +90,9 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
       BuildContext context, PageRouteInfo<Object?> route) async {
     final router = context.router.root;
     _runNavGuarded(() async {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       _closeDrawer(context);
       await router.replace(route);
     });
@@ -95,7 +102,9 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
       BuildContext context, PageRouteInfo<Object?> route) async {
     final router = context.router.root;
     _runNavGuarded(() async {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       _closeDrawer(context);
       await router.push(route);
     });
@@ -104,18 +113,20 @@ class _CustomDrawerState extends ConsumerState<CustomDrawer> {
   Future<void> _logout(BuildContext context, DrawerViewModel vm) async {
     final router = context.router.root;
     _runNavGuarded(() async {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       _closeDrawer(context);
       await vm.logout();
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       router.replaceAll([const AuthRoute()]);
     });
   }
 }
 
-// ---------------------------------------------------------------------------
 // Drawer body
-// ---------------------------------------------------------------------------
 
 final class _DrawerBody extends StatelessWidget {
   final DrawerViewModel vm;
@@ -177,14 +188,100 @@ final class _DrawerBody extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Header — app name, connected instance, server version + compat badge
-// ---------------------------------------------------------------------------
+// Header
 
 final class _DrawerHeader extends StatelessWidget {
   final WidgetRef ref;
 
   const _DrawerHeader({required this.ref});
+
+  void _showCompatibilityDialog(
+    BuildContext context,
+    ServerCompatibilityState compatState,
+  ) {    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final (IconData icon, Color color, String statusLabel) =
+        switch (compatState.status) {
+      ServerCompatibilityStatus.ok => (
+          Icons.check_circle,
+          Colors.green,
+          'Compatible',
+        ),
+      ServerCompatibilityStatus.warning => (
+          Icons.warning_amber_rounded,
+          Colors.orange,
+          'Warning',
+        ),
+      ServerCompatibilityStatus.incompatible => (
+          Icons.error_outline,
+          Colors.red,
+          'Incompatible',
+        ),
+      ServerCompatibilityStatus.unknown => (
+          Icons.help_outline,
+          Colors.grey,
+          'Unknown',
+        ),
+    };
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Icon(icon, color: color, size: 22),
+            const SizedBox(width: 10),
+            Text(
+              'Server Compatibility',
+              style: theme.textTheme.titleMedium
+                  ?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _InfoRow(label: 'Status', value: statusLabel, color: color),
+            if (compatState.serverVersion != null)
+              _InfoRow(
+                label: 'Server',
+                value: 'v${compatState.serverVersion}',
+              ),
+            if (compatState.appVersion != null)
+              _InfoRow(
+                label: 'App',
+                value: 'v${compatState.appVersion}',
+              ),
+            if (compatState.recommendServer != null)
+              _InfoRow(
+                label: 'Recommended server',
+                value: compatState.recommendServer!,
+              ),
+            if (compatState.message != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                compatState.message!,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.textTheme.bodySmall?.color
+                      ?.withValues(alpha: isDark ? 0.75 : 0.8),
+                  height: 1.4,
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -198,7 +295,7 @@ final class _DrawerHeader extends StatelessWidget {
       data: (cfg) {
         final host = cfg.apiConfig?.host;
         if (host == null || host.isEmpty) return null;
-        // Strip protocol for a cleaner look
+        // Strip protocol for a cleaner display
         return host
             .replaceFirst(RegExp(r'^https?://'), '')
             .replaceFirst(RegExp(r'/$'), '');
@@ -214,8 +311,7 @@ final class _DrawerHeader extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // App title
-          Row(
-            children: [
+          Row(            children: [
               Icon(Icons.pin_drop, size: 28, color: theme.colorScheme.primary),
               const SizedBox(width: 10),
               Text(
@@ -230,55 +326,58 @@ final class _DrawerHeader extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Server info pill
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: (isDark ? Colors.white : Colors.black)
-                  .withValues(alpha: isDark ? 0.07 : 0.04),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
+          GestureDetector(
+            onTap: () => _showCompatibilityDialog(context, compatState),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
                 color: (isDark ? Colors.white : Colors.black)
-                    .withValues(alpha: 0.06),
+                    .withValues(alpha: isDark ? 0.07 : 0.04),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: (isDark ? Colors.white : Colors.black)
+                      .withValues(alpha: 0.06),
+                ),
               ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.dns_outlined,
-                  size: 18,
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        serverHost ?? 'Not connected',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                        maxLines: 1,
-                      ),
-                      if (serverVersion != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Server v$serverVersion',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            fontSize: 11,
-                            color: theme.textTheme.bodySmall?.color
-                                ?.withValues(alpha: 0.6),
-                          ),
-                        ),
-                      ],
-                    ],
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.dns_outlined,
+                    size: 18,
+                    color: theme.colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
-                ),
-                const SizedBox(width: 8),
-                _CompatBadge(status: status),
-              ],
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          serverHost ?? 'Not connected',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
+                        ),
+                        if (serverVersion != null) ...[
+                          const SizedBox(height: 2),
+                          Text(
+                            'Server v$serverVersion',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontSize: 11,
+                              color: theme.textTheme.bodySmall?.color
+                                  ?.withValues(alpha: 0.6),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  _CompatBadge(status: status),
+                ],
+              ),
             ),
           ),
         ],
@@ -287,9 +386,7 @@ final class _DrawerHeader extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
 // Compatibility badge
-// ---------------------------------------------------------------------------
 
 final class _CompatBadge extends StatelessWidget {
   final ServerCompatibilityStatus status;
@@ -328,9 +425,7 @@ final class _CompatBadge extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Navigation section — single column, card-style buttons
-// ---------------------------------------------------------------------------
+// Navigation section
 
 final class _NavSection extends StatelessWidget {
   final void Function(PageRouteInfo<Object?> route) onNavigate;
@@ -426,9 +521,7 @@ final class _NavTile extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Bottom section — logout + about
-// ---------------------------------------------------------------------------
+// Bottom section
 
 final class _BottomSection extends StatelessWidget {
   final VoidCallback onLogout;
@@ -484,7 +577,7 @@ final class _BottomSection extends StatelessWidget {
             ),
           ),
         ),
-        // Subtle about / version badge
+        // Version badge
         GestureDetector(
           onTap: onAbout,
           behavior: HitTestBehavior.opaque,
@@ -534,6 +627,50 @@ final class _BottomSection extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+}
+
+// Shared helpers
+
+/// A compact label/value row used inside the compatibility dialog.
+final class _InfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color? color;
+
+  const _InfoRow({required this.label, required this.value, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(
+              label,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.55),
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
