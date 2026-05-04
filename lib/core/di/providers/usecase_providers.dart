@@ -96,7 +96,6 @@ final statsRepositoryProvider = FutureProvider<IStatsRepository>((ref) async {
 // --- Tracking repositories ---
 final activityTransitionDataClientProvider = Provider<ActivityTransitionDataClient>((ref) {
   final client = ActivityTransitionDataClient();
-  client.initialize();
   ref.onDispose(client.dispose);
   return client;
 });

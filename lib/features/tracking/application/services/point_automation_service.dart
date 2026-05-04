@@ -542,6 +542,8 @@ final class PointAutomationService {
 
       _startLocationStream(userId);
 
+      _recoveryAttempt = 0;
+
       if (kDebugMode) {
         debugPrint("[PointAutomation] Location stream restarted");
       }
