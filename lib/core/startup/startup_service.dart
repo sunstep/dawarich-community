@@ -100,6 +100,8 @@ final class StartupService {
 
       final settings = await getSettings(refreshedSessionUser.id);
 
+      bool needsServiceStart = false;
+
       if (settings.automaticTracking) {
         if (kDebugMode) {
           debugPrint('[StartupService] Registering tracking watchdog (startup sync).');
@@ -107,18 +109,11 @@ final class StartupService {
 
         await TrackingWatchdogWorkScheduler.register();
 
-        // If the foreground service is not alive (e.g. the process crashed or
-        // was killed by the OEM), restart it immediately instead of waiting up
-        // to 15 minutes for the WorkManager watchdog to fire.
         final isRunning = await BackgroundTrackingService.isRunning();
-        if (!isRunning) {
-          if (kDebugMode) {
-            debugPrint('[StartupService] Auto tracking enabled but service not running — restarting now.');
-          }
-          final result = await BackgroundTrackingService.start();
-          if (kDebugMode) {
-            debugPrint('[StartupService] Tracking restart result: $result');
-          }
+        needsServiceStart = !isRunning;
+
+        if (kDebugMode && needsServiceStart) {
+          debugPrint('[StartupService] Auto tracking enabled but service not running — will start after navigation.');
         }
       } else {
         if (kDebugMode) {
@@ -126,6 +121,16 @@ final class StartupService {
         }
 
         await TrackingWatchdogWorkScheduler.cancel();
+      }
+
+      void scheduleServiceStart() {
+        if (!needsServiceStart) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final result = await BackgroundTrackingService.start();
+          if (kDebugMode) {
+            debugPrint('[StartupService] Tracking restart result: $result');
+          }
+        });
       }
 
 
@@ -138,6 +143,7 @@ final class StartupService {
 
         final route = AppRouter.routeFromPath(pendingRoute);
         appRouter.replaceAll([route]);
+        scheduleServiceStart();
         return;
       }
 
@@ -145,7 +151,6 @@ final class StartupService {
         debugPrint('[StartupService] Navigating to timeline screen...');
       }
 
-      // Check if all onboarding permissions have been granted.
       final permissions = await CheckOnboardingPermissionsUseCase()();
       final allGranted = permissions.every((p) => p.granted);
 
@@ -176,6 +181,8 @@ final class StartupService {
         }
         appRouter.replaceAll([const PermissionsOnboardingRoute()]);
       }
+
+      scheduleServiceStart();
       return;
     } else {
       if (kDebugMode) {

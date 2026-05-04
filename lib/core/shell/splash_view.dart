@@ -28,7 +28,9 @@ class _SplashPageState extends ConsumerState<SplashView> {
     if (kDebugMode) {
       debugPrint('[SplashPage] initState called');
     }
-    _startBoot();
+    // Defer until after the first frame so the native splash is dismissed and
+    // the Flutter engine has rendered before any platform-channel work begins.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _startBoot());
   }
 
   Future<void> _startBoot() async {

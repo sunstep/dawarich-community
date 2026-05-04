@@ -113,7 +113,6 @@ final class PointAutomationService {
     _startSettingsWatch(userId);
     _startConnectivityWatch(userId);
     _startBatteryWatch(userId);
-    _startMotionTransitionWatch(userId);
     _startLocationStream(userId);
     _startBatchCountWatch(userId);
   }
@@ -368,9 +367,9 @@ final class PointAutomationService {
 
   /// Subscribes to locomotion transition events from the OS.
   ///
-  /// When passive, wakes to monitor so the cell+WiFi stream can confirm
-  /// real movement before committing to full GPS. Already in monitor or
-  /// active — ignored, evaluateFix() handles it from there.
+  /// When passive, wakes to monitor. When already in monitor and GPS cannot
+  /// confirm movement (weak signal), resets the idle timer so the tracker
+  /// stays in monitor as long as motion events keep arriving.
   void _startMotionTransitionWatch(int userId) {
     _motionTransitionSub?.cancel();
 
@@ -424,6 +423,11 @@ final class PointAutomationService {
         if (isAutoMode == true && previousMode != nextMode) {
           _setAutoTrackingRuntimeMode(nextMode);
           await _restartLocationStream(userId);
+        } else if (isAutoMode == true &&
+            nextMode == AutoTrackingRuntimeMode.monitor) {
+          // Mode unchanged but motion confirmed — restart the external idle
+          // timer so we don't drop to passive while the device is still moving.
+          _startMonitorIdleTimer(userId);
         }
       },
       onError: (e) {
@@ -542,7 +546,6 @@ final class PointAutomationService {
 
       _startLocationStream(userId);
 
-      _recoveryAttempt = 0;
 
       if (kDebugMode) {
         debugPrint("[PointAutomation] Location stream restarted");
@@ -609,6 +612,10 @@ final class PointAutomationService {
 
   Future<void> _handleLocationUpdate(TrackingSample sample, int userId) async {
     try {
+      // The stream is alive and delivering — reset the backoff counter so
+      // intermittent errors don't permanently exhaust recovery attempts.
+      _recoveryAttempt = 0;
+
       final previousMode = _autoTrackingRuntimeMode;
       final settings = _currentSettings;
       final isAutoMode = settings?.trackingFrequency == 0;
@@ -706,6 +713,7 @@ final class PointAutomationService {
     switch (mode) {
       case AutoTrackingRuntimeMode.active:
         _cancelMonitorIdleTimer();
+        _cancelMotionTransitionWatch();
         if (userId != null) _startOrResetActiveSilenceTimer(userId);
       case AutoTrackingRuntimeMode.monitor:
         _cancelActiveSilenceTimer();
@@ -713,6 +721,7 @@ final class PointAutomationService {
       case AutoTrackingRuntimeMode.passive:
         _cancelActiveSilenceTimer();
         _cancelMonitorIdleTimer();
+        if (userId != null) _startMotionTransitionWatch(userId);
     }
 
     if (kDebugMode) {
@@ -725,6 +734,11 @@ final class PointAutomationService {
   void _cancelActiveSilenceTimer() {
     _activeSilenceTimer?.cancel();
     _activeSilenceTimer = null;
+  }
+
+  void _cancelMotionTransitionWatch() {
+    _motionTransitionSub?.cancel();
+    _motionTransitionSub = null;
   }
 
   void _startOrResetActiveSilenceTimer(int userId) {

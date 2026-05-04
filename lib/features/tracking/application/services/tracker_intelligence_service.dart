@@ -72,11 +72,20 @@ final class TrackerIntelligenceService {
       if (kDebugMode) {
         debugPrint('[TrackerIntelligence] Motion transition: passive → monitor');
       }
+    } else if (_currentMode == AutoTrackingRuntimeMode.monitor) {
+      // GPS may not be delivering fixes yet (weak signal, indoors). Reset both
+      // clocks so the monitor window restarts from now, preventing an idle
+      // timeout from dropping to passive while significant motion is ongoing.
+      _monitorEnteredTime = DateTime.now().toUtc();
+      _lastMeaningfulMovementTime = DateTime.now().toUtc();
+
+      if (kDebugMode) {
+        debugPrint('[TrackerIntelligence] Motion transition in monitor: idle timer reset');
+      }
     } else {
       if (kDebugMode) {
         debugPrint(
-          '[TrackerIntelligence] Motion transition ignored in $_currentMode '
-          '(GPS manages keep-alive)',
+          '[TrackerIntelligence] Motion transition ignored in $_currentMode',
         );
       }
     }
