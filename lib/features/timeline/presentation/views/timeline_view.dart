@@ -325,7 +325,6 @@ class _TimelinePageState extends ConsumerState<TimelineView> with TickerProvider
                   );
                 }).toList(),
               ),
-            const CurrentLocationLayer(),
           // Only show the live position marker when viewing today — on
           // historical dates it would be confusing and out-of-sync with
           // the displayed track.
