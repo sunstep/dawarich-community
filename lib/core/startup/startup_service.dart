@@ -26,14 +26,15 @@ final class StartupService {
   // multiple onPaused timestamps) on every foreground/background transition.
   static AppLifecycleController? _lifecycleController;
 
-  static Future<void> initializeAppFromContainer(ProviderContainer container) async {
+  static Future<void> initializeAppFromContainer(
+      ProviderContainer container) async {
     if (kDebugMode) {
       debugPrint('[StartupService] Initializing app...');
     }
 
-    final initNotif = container.read(initializeTrackerNotificationServiceUseCaseProvider);
+    final initNotif =
+        container.read(initializeTrackerNotificationServiceUseCaseProvider);
     await initNotif();
-
 
     final DawarichAndroidUserModule<User> sessionService =
         await container.read(sessionBoxProvider.future);
@@ -55,22 +56,23 @@ final class StartupService {
       );
 
       // Load the persisted theme preference.
-      final getTheme =
-          await container.read(getThemeModeUseCaseProvider.future);
+      final getTheme = await container.read(getThemeModeUseCaseProvider.future);
       final savedTheme = await getTheme(refreshedSessionUser.id);
-      container.read(themeModeProvider.notifier).set(
-          themeModeFromString(savedTheme));
+      container
+          .read(themeModeProvider.notifier)
+          .set(themeModeFromString(savedTheme));
       // Fire-and-forget: purely advisory, fails open, and makes up to 3 serial
       // HTTP requests (server + GitHub x2) each with a 20 s Dio timeout.
       // Awaiting it would block the splash screen for up to 60 s.
       unawaited(() async {
         try {
-          final refreshServerCompatibility =
-              await container.read(refreshServerCompatibilityUseCaseProvider.future);
+          final refreshServerCompatibility = await container
+              .read(refreshServerCompatibilityUseCaseProvider.future);
           await refreshServerCompatibility();
         } catch (e) {
           if (kDebugMode) {
-            debugPrint('[StartupService] Version check failed (non-critical): $e');
+            debugPrint(
+                '[StartupService] Version check failed (non-critical): $e');
           }
         }
       }());
@@ -96,7 +98,7 @@ final class StartupService {
       await registerBatchUploadWorker();
 
       final getSettings =
-      await container.read(getTrackerSettingsUseCaseProvider.future);
+          await container.read(getTrackerSettingsUseCaseProvider.future);
 
       final settings = await getSettings(refreshedSessionUser.id);
 
@@ -104,20 +106,22 @@ final class StartupService {
 
       if (settings.automaticTracking) {
         if (kDebugMode) {
-          debugPrint('[StartupService] Registering tracking watchdog (startup sync).');
+          debugPrint(
+              '[StartupService] Registering tracking watchdog (startup sync).');
         }
 
         await TrackingWatchdogWorkScheduler.register();
 
-        final isRunning = await BackgroundTrackingService.isRunning();
-        needsServiceStart = !isRunning;
+        needsServiceStart = true;
 
-        if (kDebugMode && needsServiceStart) {
-          debugPrint('[StartupService] Auto tracking enabled but service not running — will start after navigation.');
+        if (kDebugMode) {
+          debugPrint(
+              '[StartupService] Auto tracking enabled — will verify service health after navigation.');
         }
       } else {
         if (kDebugMode) {
-          debugPrint('[StartupService] Cancelling tracking watchdog (startup sync).');
+          debugPrint(
+              '[StartupService] Cancelling tracking watchdog (startup sync).');
         }
 
         await TrackingWatchdogWorkScheduler.cancel();
@@ -133,11 +137,12 @@ final class StartupService {
         });
       }
 
-
-      final pendingRoute = InitializeTrackerNotificationServiceUseCase.pendingNotificationRoute;
+      final pendingRoute =
+          InitializeTrackerNotificationServiceUseCase.pendingNotificationRoute;
       if (pendingRoute != null) {
         if (kDebugMode) {
-          debugPrint('[StartupService] Navigating to pending notification route: $pendingRoute');
+          debugPrint(
+              '[StartupService] Navigating to pending notification route: $pendingRoute');
         }
         InitializeTrackerNotificationServiceUseCase.clearPendingRoute();
 
@@ -157,13 +162,11 @@ final class StartupService {
       if (allGranted) {
         final isEnabled =
             await container.read(isBiometricLockEnabledUseCaseProvider.future);
-        final biometricEnabled =
-            await isEnabled(refreshedSessionUser.id);
+        final biometricEnabled = await isEnabled(refreshedSessionUser.id);
         if (biometricEnabled) {
           final getTimeout =
               await container.read(getLockTimeoutUseCaseProvider.future);
-          final timeoutSeconds =
-              await getTimeout(refreshedSessionUser.id);
+          final timeoutSeconds = await getTimeout(refreshedSessionUser.id);
           final shouldLock = AppLockTimestampTracker.instance.shouldLock(
             timeoutSeconds: timeoutSeconds,
           );
@@ -177,7 +180,8 @@ final class StartupService {
         }
       } else {
         if (kDebugMode) {
-          debugPrint('[StartupService] Missing permissions, navigating to onboarding...');
+          debugPrint(
+              '[StartupService] Missing permissions, navigating to onboarding...');
         }
         appRouter.replaceAll([const PermissionsOnboardingRoute()]);
       }
@@ -186,7 +190,8 @@ final class StartupService {
       return;
     } else {
       if (kDebugMode) {
-        debugPrint('[StartupService] No user session found, navigating to auth screen...');
+        debugPrint(
+            '[StartupService] No user session found, navigating to auth screen...');
       }
       sessionService.logout();
       appRouter.replaceAll([const AuthRoute()]);
