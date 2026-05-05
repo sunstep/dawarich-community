@@ -395,10 +395,12 @@ final class BackgroundTrackingService {
     await readySub.cancel();
 
     if (timedOut) {
-      final stillRunning = await FlutterBackgroundService().isRunning();
-      if (!stillRunning) {
-        return Err("Background service failed during startup — session or settings check failed.");
-      }
+
+      debugPrint('[BackgroundService] start() timed out waiting for ready — stopping service.');
+      try {
+        FlutterBackgroundService().invoke('stopService', {'requestId': 'start_timeout'});
+      } catch (_) {}
+      return Err("Background service did not confirm readiness within the startup window.");
     }
 
     return Ok(());
