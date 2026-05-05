@@ -161,6 +161,10 @@ class BackgroundTrackingEntry {
   }
 
   static void registerListeners(ServiceInstance backgroundService) {
+    backgroundService.on('ping').listen((_) {
+      backgroundService.invoke('pong', {});
+    });
+
     backgroundService.on('stopService').listen((event) async {
       final requestId = event?['requestId'];
       try {
@@ -241,7 +245,6 @@ class BackgroundTrackingEntry {
 final class BackgroundTrackingService {
 
   static bool _configured = false;
-  static Completer<void>? _starting;
   static bool _isStopping = false;
 
 
@@ -304,43 +307,6 @@ final class BackgroundTrackingService {
   }
 
 
-  /// Start (if needed) and configure the background service.
-  /// Safe/idempotent across concurrent callers
-  static Future<void> configureService({bool force = false}) async {
-    // coalesce concurrent calls
-    if (_starting != null) {
-      return _starting!.future;
-    }
-
-    _starting = Completer<void>();
-
-    try {
-      await installConfigurationOnce();
-
-      final service = FlutterBackgroundService();
-
-      if (!await service.isRunning()) {
-        await service.startService();
-
-        final ready = Completer<void>();
-        final sub = service.on('ready').listen((_) {
-          if (!ready.isCompleted) ready.complete();
-        });
-        await ready.future.timeout(const Duration(seconds: 5), onTimeout: () {});
-        await sub.cancel();
-      }
-
-
-      _starting!.complete();
-    } catch (e, s) {
-      if (kDebugMode) debugPrint('[Tracker] configureService failed: $e\n$s');
-      _starting!.completeError(e, s);
-      rethrow;
-    } finally {
-      _starting = null;
-    }
-  }
-
   static Future<Result<(), String>> start() async {
 
     if (!(await Permission.notification.isGranted)) {
@@ -358,24 +324,28 @@ final class BackgroundTrackingService {
 
     await installConfigurationOnce();
 
-    // If configure() failed (not a timeout-while-already-running case), only
-    // proceed if the service is already alive from autoStartOnBoot. Otherwise
-    // startService() would launch an unconfigured service.
     if (!_configured) {
-      final isAlreadyRunning = await FlutterBackgroundService().isRunning();
-      if (!isAlreadyRunning) {
+      if (!await FlutterBackgroundService().isRunning()) {
         return Err("Background service configuration failed.");
+      }
+
+      if (!await _pingService()) {
+        FlutterBackgroundService().invoke('stopService', {'requestId': 'unconfigured_zombie'});
+        return Err("Background service is running but unresponsive.");
       }
       return Ok(());
     }
 
-    final isRunning = await FlutterBackgroundService().isRunning();
-    if (isRunning) {
-      debugPrint('[BackgroundService] Already running — skipping start.');
-      return Ok(());
+    if (await FlutterBackgroundService().isRunning()) {
+      if (await _pingService()) {
+        debugPrint('[BackgroundService] Already running and healthy — skipping start.');
+        return Ok(());
+      }
+      debugPrint('[BackgroundService] Zombie service detected — stopping for clean restart.');
+      FlutterBackgroundService().invoke('stopService', {'requestId': 'zombie_restart'});
+      await Future<void>.delayed(const Duration(seconds: 2));
     }
 
-    // Subscribe before startService() to avoid missing a very fast 'ready' event.
     final readyCompleter = Completer<void>();
     final readySub = FlutterBackgroundService().on('ready').listen((_) {
       if (!readyCompleter.isCompleted) readyCompleter.complete();
@@ -408,6 +378,22 @@ final class BackgroundTrackingService {
 
   static Future<bool> isRunning() async {
     return FlutterBackgroundService().isRunning();
+  }
+
+  static Future<bool> _pingService() async {
+    final completer = Completer<void>();
+    final sub = FlutterBackgroundService().on('pong').listen((_) {
+      if (!completer.isCompleted) completer.complete();
+    });
+    FlutterBackgroundService().invoke('ping', {});
+
+    bool timedOut = false;
+    await completer.future.timeout(
+      const Duration(seconds: 5),
+      onTimeout: () { timedOut = true; },
+    );
+    await sub.cancel();
+    return !timedOut;
   }
 
   static Future<void> stop() async {
@@ -453,8 +439,7 @@ final class BackgroundTrackingService {
     }
   }
 
-  /// Restart tracking to apply new settings (e.g., frequency change)
-  /// Sends event to background isolate to restart the tracking logic.
+
   static Future<void> restartTracking() async {
     final service = FlutterBackgroundService();
 
