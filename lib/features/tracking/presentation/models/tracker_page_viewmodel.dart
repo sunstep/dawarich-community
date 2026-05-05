@@ -505,6 +505,7 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
       await TrackingWatchdogWorkScheduler.register();
 
     } else {
+      await setAutomaticTracking(false);
       BackgroundTrackingService.stop();
       await TrackingWatchdogWorkScheduler.cancel();
     }

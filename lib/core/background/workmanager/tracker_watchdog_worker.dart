@@ -39,22 +39,24 @@ final class TrackingWatchdogWorker {
 
       if (!settings.automaticTracking) {
         if (kDebugMode) {
-          debugPrint('[TrackingWatchdog] Automatic tracking disabled, skipping.');
+          debugPrint(
+              '[TrackingWatchdog] Automatic tracking disabled, skipping.');
         }
         return;
       }
 
-      final isRunning = await BackgroundTrackingService.isRunning();
+      final isHealthy = await BackgroundTrackingService.isHealthy();
 
-      if (isRunning) {
+      if (isHealthy) {
         if (kDebugMode) {
-          debugPrint('[TrackingWatchdog] Service already running.');
+          debugPrint('[TrackingWatchdog] Service already healthy.');
         }
         return;
       }
 
       if (kDebugMode) {
-        debugPrint('[TrackingWatchdog] Service not running, restarting...');
+        debugPrint(
+            '[TrackingWatchdog] Service missing or unhealthy, restarting...');
       }
 
       final result = await BackgroundTrackingService.start();
