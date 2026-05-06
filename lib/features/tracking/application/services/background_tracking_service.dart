@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dawarich/core/background/schedulers/tracking_watchdog_scheduler.dart';
 import 'package:dawarich/core/constants/notification.dart';
 import 'package:dawarich/core/data/drift/database/sqlite_client.dart';
 import 'package:dawarich/core/domain/models/user.dart';
@@ -437,6 +438,8 @@ final class BackgroundTrackingService {
           "Background service did not confirm readiness within the startup window.");
     }
 
+    await TrackingWatchdogWorkScheduler.register();
+
     return Ok(());
   }
 
@@ -520,6 +523,8 @@ final class BackgroundTrackingService {
 
     if (_isStopping) return;
     _isStopping = true;
+
+    await TrackingWatchdogWorkScheduler.cancel();
 
     final requestId = DateTime.now().millisecondsSinceEpoch.toString();
     final stopCompleter = Completer<void>();

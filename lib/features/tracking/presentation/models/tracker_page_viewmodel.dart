@@ -26,6 +26,7 @@ import 'package:dawarich/features/tracking/presentation/converters/last_point_co
 import 'package:dawarich/features/tracking/presentation/converters/track_converter.dart';
 import 'package:dawarich/features/batch/presentation/models/local_point_viewmodel.dart';
 import 'package:dawarich/features/tracking/presentation/models/track_viewmodel.dart';
+import 'package:dawarich_tracking_engine/dawarich_tracking_engine.dart';
 import 'package:flutter/foundation.dart';
 import 'package:dawarich/features/tracking/presentation/models/last_point_viewmodel.dart';
 import 'package:option_result/option_result.dart';
@@ -448,71 +449,83 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
     if (_isUpdatingTracking) {
       return Err("Tracking update already in progress.");
     }
+
     setIsUpdatingTracking(true);
-    await Future.delayed(const Duration(milliseconds: 500));
+
+    final Result<(), String> result;
 
     if (enable) {
-      final bool shouldShowConsentDialog = await _shouldShowConsentDialog();
-      if (shouldShowConsentDialog) {
-        final bool confirmed = await requestConsentFromUser(
-            'To enable automatic background tracking, Dawarich needs your permission.\n\n'
-                'It will request background location access, notification permission, and system exclusions.'
-        );
-
-        if (!confirmed) {
-          await setAutomaticTracking(false);
-          setIsUpdatingTracking(false);
-          return Err("Permission setup cancelled by user.");
-        }
-      }
-
-      final permissionResult = await _requestTrackingPermissions();
-      if (permissionResult case Err(value: final message)) {
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-        return Err(message);
-      }
-
-      final notificationGranted = await _requestNotificationPermission();
-      if (!notificationGranted) {
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-        return Err("Notification permission is required.");
-      }
-
-      await setAutomaticTracking(enable);
-
-      final serviceResult = await BackgroundTrackingService.start();
-      await _openSystemSettings();
-      debugPrint("[TrackerPageViewModel] Background start result: $serviceResult");
-
-      final needsFix = await _checkSystemSettings();
-
-      if (serviceResult case Err(value: final message)) {
-        if (needsFix) {
-          _consentPromptController.add(
-              'Some system settings still need your help to enable reliable background tracking.\n\n'
-                  'Please check location permission, battery optimization, and notification settings.'
-          );
-        }
-
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-
-        return Err("Failed to start background service: $message");
-      }
-
-      await TrackingWatchdogWorkScheduler.register();
-
+      result = await _enableAutomaticTracking();
     } else {
-      await setAutomaticTracking(false);
-      BackgroundTrackingService.stop();
-      await TrackingWatchdogWorkScheduler.cancel();
+      result = await _disableAutomaticTracking();
     }
 
     setIsUpdatingTracking(false);
+
+    return result;
+  }
+
+  Future<Result<(), String>> _enableAutomaticTracking() async {
+    final bool shouldShowConsentDialog = await _shouldShowConsentDialog();
+
+    if (shouldShowConsentDialog) {
+      final bool confirmed = await requestConsentFromUser(
+        'To enable automatic background tracking, Dawarich Community needs your permission.\n\n'
+            'It will request background location access, notification permission, and system exclusions.',
+      );
+
+      if (!confirmed) {
+        return Err("Permission setup cancelled by user.");
+      }
+    }
+
+    final permissionResult = await _requestTrackingPermissions();
+
+    if (permissionResult case Err(value: final message)) {
+      return Err(message);
+    }
+
+    final bool notificationGranted = await _requestNotificationPermission();
+
+    if (!notificationGranted) {
+      return Err("Notification permission is required.");
+    }
+
+    await _openSystemSettings();
+
+    final bool needsFix = await _checkSystemSettings();
+
+    if (needsFix) {
+      _consentPromptController.add(
+        'Some system settings still need your help to enable reliable background tracking.\n\n'
+            'Please check location permission, battery optimization, and notification settings.',
+      );
+    }
+
+    final serviceResult = await BackgroundTrackingService.start();
+
+    if (serviceResult case Err(value: final message)) {
+      return Err("Failed to start background service: $message");
+    }
+
+    await setAutomaticTracking(true);
+
     return Ok(());
   }
+
+  Future<Result<(), String>> _disableAutomaticTracking() async {
+
+    final serviceResult = await BackgroundTrackingService.stop();
+
+    if (serviceResult case Err(value: final message)) {
+      return Err("Failed to stop background service: $message");
+    }
+
+    await setAutomaticTracking(false);
+
+    return Ok(());
+  }
+
 
   Future<Result<(), String>> _requestTrackingPermissions() async {
 
@@ -524,17 +537,6 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
 
     if (!locationStatus.isGranted) {
       return Err("Location permission 'Always' is required for background tracking.");
-    }
-
-    // Request activity recognition for smart passive mode (Activity Transition
-    // API on GMS, TYPE_SIGNIFICANT_MOTION on FOSS). Not strictly required —
-    // tracking still works without it, but battery efficiency is significantly
-    // reduced without motion transition detection.
-    final activityStatus = await Permission.activityRecognition.request();
-    if (kDebugMode) {
-      debugPrint(
-        '[TrackerPageViewModel] Activity recognition permission: $activityStatus',
-      );
     }
 
     return const Ok(());
