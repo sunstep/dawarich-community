@@ -152,13 +152,12 @@ See the [LICENSE](LICENSE) file for details.
 
 ## Stats
 
-<a href="https://www.star-history.com/#sunstep/dawarich-android&Date">
+<a href="https://www.star-history.com/?repos=sunstep%2Fdawarich-community&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=sunstep/dawarich-android&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=sunstep/dawarich-android&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=sunstep/dawarich-android&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left" />
  </picture>
-  
 </a>
 
 ![Alt](https://repobeats.axiom.co/api/embed/865774172fe6d2c5e992c1e1af707996a403a60b.svg "Repobeats analytics image")
