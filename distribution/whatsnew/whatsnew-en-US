@@ -1,13 +1,9 @@
-Full and more detailed release notes are always available at the GitHub repository!
+v0.20.0
+Highlights of this release:
+* Self signed certificate support
+* Batch expiration setting
+* Auto mode is now the default tracker mode for new installs
+* Improvements and fixes
 
-v0.19.3
-
-* Timeline: local points now connect seamlessly to the synced API track
-* Timeline: distance filter is now a configurable per-user preference
-* Timeline: current-location marker hidden on historical date views
-* Stats: cached stats are preserved when a refresh fails while offline
-* Auth: QR code scanner available on hosted/cloud login screen
-* Onboarding: permissions page can now be skipped without granting all permissions
-* Self-signed certificate support via native HTTP client
-* Batch upload expiration: stale uploads are automatically cleaned up
-* Auto mode (GPS stream) is now the default tracking mode for new installs
+Full release notes are available on GitHub:
+https://github.com/sunstep/dawarich-community/releases
