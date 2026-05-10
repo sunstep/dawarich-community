@@ -7,4 +7,6 @@ abstract interface class IAppSettingsRepository {
   Future<void> setLastAuthenticatedAt(int userId, DateTime time);
   Future<String> getThemeMode(int userId);
   Future<void> setThemeMode(int userId, String mode);
+  Future<int> getTimelineDistanceThreshold(int userId);
+  Future<void> setTimelineDistanceThreshold(int userId, int meters);
 }

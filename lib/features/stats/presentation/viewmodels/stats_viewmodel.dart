@@ -44,11 +44,16 @@ class StatsViewmodel extends _$StatsViewmodel {
   }
 
   Future<void> refresh() async {
+    // Remember the last successfully loaded state so we can restore it if the
+    // refresh fails (e.g. offline) rather than blanking the screen.
+    final StatsPageState? previousData = state.value;
+
     state = const AsyncLoading();
 
-    state = await AsyncValue.guard(() async {
+    try {
       final getStats = await ref.read(getStatsUseCaseProvider.future);
-      final getLastSyncedAt = await ref.read(getLastStatsSyncUseCaseProvider.future);
+      final getLastSyncedAt =
+          await ref.read(getLastStatsSyncUseCaseProvider.future);
 
       final User user = ref.read(currentUserProvider);
       final int userId = user.id;
@@ -61,11 +66,19 @@ class StatsViewmodel extends _$StatsViewmodel {
 
       final DateTime? lastSyncedAtUtc = await getLastSyncedAt(userId);
 
-      return StatsPageState(
+      state = AsyncData(StatsPageState(
         stats: stats,
         syncedAtUtc: lastSyncedAtUtc,
-      );
-    });
+      ));
+    } catch (e, st) {
+      // On any failure, restore the last known good state so cached stats
+      // remain visible rather than disappearing.
+      if (previousData != null) {
+        state = AsyncData(previousData);
+      } else {
+        state = AsyncError(e, st);
+      }
+    }
   }
 
   Future<StatsUiModel?> _fetchStats(

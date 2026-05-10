@@ -4,10 +4,12 @@ import 'package:dawarich/features/settings/application/usecases/authenticate_bio
 import 'package:dawarich/features/settings/application/usecases/check_biometric_availability_usecase.dart';
 import 'package:dawarich/features/settings/application/usecases/get_lock_timeout_usecase.dart';
 import 'package:dawarich/features/settings/application/usecases/get_theme_mode_usecase.dart';
+import 'package:dawarich/features/settings/application/usecases/get_timeline_distance_threshold_usecase.dart';
 import 'package:dawarich/features/settings/application/usecases/is_biometric_lock_enabled_usecase.dart';
 import 'package:dawarich/features/settings/application/usecases/set_biometric_lock_enabled_usecase.dart';
 import 'package:dawarich/features/settings/application/usecases/set_lock_timeout_usecase.dart';
 import 'package:dawarich/features/settings/application/usecases/set_theme_mode_usecase.dart';
+import 'package:dawarich/features/settings/application/usecases/set_timeline_distance_threshold_usecase.dart';
 import 'package:dawarich/features/settings/data/repositories/app_settings_repository.dart';
 import 'package:dawarich/features/settings/data/sources/local/app_settings_local_data_source.dart';
 import 'package:flutter/material.dart';
@@ -65,6 +67,18 @@ final setThemeModeUseCaseProvider =
     FutureProvider<SetThemeModeUseCase>((ref) async {
   final repo = await ref.watch(appSettingsRepositoryProvider.future);
   return SetThemeModeUseCase(repo);
+});
+
+final getTimelineDistanceThresholdUseCaseProvider =
+    FutureProvider<GetTimelineDistanceThresholdUseCase>((ref) async {
+  final repo = await ref.watch(appSettingsRepositoryProvider.future);
+  return GetTimelineDistanceThresholdUseCase(repo);
+});
+
+final setTimelineDistanceThresholdUseCaseProvider =
+    FutureProvider<SetTimelineDistanceThresholdUseCase>((ref) async {
+  final repo = await ref.watch(appSettingsRepositoryProvider.future);
+  return SetTimelineDistanceThresholdUseCase(repo);
 });
 
 final checkBiometricAvailabilityUseCaseProvider =

@@ -29,9 +29,17 @@ final class StatsRepository implements IStatsRepository {
         stats: remote.unwrap(),
         syncedAt: DateTime.now(),
       );
+      return remote;
     }
 
-    return remote;
+    // Remote call failed (e.g. offline). Fall back to the cached version so a
+    // forceRefresh while offline doesn't wipe the displayed stats.
+    final cached = await _cache.getCachedStats(userId);
+    if (cached.isSome()) {
+      return Some(cached.unwrap().stats);
+    }
+
+    return remote; // None — no cache and no network
   }
 
   @override

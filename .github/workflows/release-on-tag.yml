@@ -17,7 +17,6 @@ permissions:
   pull-requests: write
 
 jobs:
-  # ── Resolve tag and version metadata (fast, shared by all jobs) ──
   meta:
     runs-on: ubuntu-latest
     outputs:
@@ -86,7 +85,6 @@ jobs:
             echo "prerelease=false" >> "$GITHUB_OUTPUT"
           fi
 
-  # ── GMS APK build ──
   build-gms:
     needs: meta
     runs-on: ubuntu-latest
@@ -196,7 +194,6 @@ jobs:
           path: build/app/outputs/flutter-apk/app-gms-release.apk
           retention-days: 5
 
-  # ── FOSS APK build (parallel to GMS) ──
   build-foss:
     needs: meta
     runs-on: ubuntu-latest
@@ -321,11 +318,15 @@ jobs:
           path: build/app/outputs/flutter-apk/app-foss-release.apk
           retention-days: 5
 
-  # ── Create GitHub Release (waits for both builds) ──
   release:
-    needs: [meta, build-gms, build-foss]
+    needs: [ meta, build-gms, build-foss ]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.meta.outputs.ref }}
+
       - name: Download GMS artifact
         uses: actions/download-artifact@v4
         with:
@@ -348,21 +349,125 @@ jobs:
           mv dist/app-foss-release.apk "dist/dawarich-${VER}+${BN}-foss.apk"
           ls -la dist
 
-      - name: Create GitHub Release and upload assets
+      - name: Build contributor sections
+        id: contributors
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          SPONSORS_FILE="distribution/contributors/sponsors.txt"
+          CODE_FILE="distribution/contributors/code.txt"
+          OUT="/tmp/contributors.md"
+          
+          {
+            if [ -f "$CODE_FILE" ] && [ -s "$CODE_FILE" ]; then
+              echo "## Code Contributors"
+              echo
+              echo "Thanks to:"
+              while IFS= read -r line; do
+                [ -n "$line" ] && echo "- $line"
+              done < "$CODE_FILE"
+              echo
+            fi
+          
+            if [ -f "$SPONSORS_FILE" ] && [ -s "$SPONSORS_FILE" ]; then
+              SPONSOR_NAMES=$(python -c "from pathlib import Path; names=[line.strip() for line in Path('$SPONSORS_FILE').read_text().splitlines() if line.strip()]; print('' if not names else names[0] if len(names)==1 else f'{names[0]} & {names[1]}' if len(names)==2 else ', '.join(names[:-1]) + f' & {names[-1]}')")
+              echo "## The real heroes"
+              echo
+              echo "💚 Huge thanks to ${SPONSOR_NAMES} for sponsoring the project 💚"
+              echo
+            fi
+          } > "$OUT"
+          
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Generate GitHub notes
+        id: generated_notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.meta.outputs.tag }}"
+          OUT="/tmp/generated-notes.md"
+          
+          gh api \
+            repos/${{ github.repository }}/releases/generate-notes \
+            -X POST \
+            -f tag_name="$TAG" \
+            > /tmp/generated.json
+          
+          jq -r '.body' /tmp/generated.json > "$OUT"
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare prerelease notes
+        if: needs.meta.outputs.prerelease == 'true'
+        id: final_notes_pre
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT="/tmp/release-notes.md"
+          
+          cat "${{ steps.generated_notes.outputs.path }}" > "$OUT"
+          
+          if [ -s "${{ steps.contributors.outputs.path }}" ]; then
+            echo >> "$OUT"
+            echo >> "$OUT"
+            cat "${{ steps.contributors.outputs.path }}" >> "$OUT"
+          fi
+          
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare stable notes
+        if: needs.meta.outputs.prerelease == 'false'
+        id: final_notes_stable
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ needs.meta.outputs.tag }}"
+          MANUAL="distribution/releases/${TAG}.md"
+          OUT="/tmp/release-notes.md"
+          
+          cat "$MANUAL" > "$OUT"
+          echo >> "$OUT"
+          echo >> "$OUT"
+          cat "${{ steps.generated_notes.outputs.path }}" >> "$OUT"
+          
+          if [ -s "${{ steps.contributors.outputs.path }}" ]; then
+            echo >> "$OUT"
+            echo >> "$OUT"
+            cat "${{ steps.contributors.outputs.path }}" >> "$OUT"
+          fi
+          
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Create prerelease and upload assets
+        if: needs.meta.outputs.prerelease == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
           target_commitish: ${{ needs.meta.outputs.sha }}
           files: dist/*
+          body_path: ${{ steps.final_notes_pre.outputs.path }}
           generate_release_notes: false
           fail_on_unmatched_files: true
-          prerelease: ${{ needs.meta.outputs.prerelease }}
+          prerelease: true
 
-  # ── F-Droid changelog (non-blocking, runs after meta, independent of release) ──
+      - name: Create stable release and upload assets
+        if: needs.meta.outputs.prerelease == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          target_commitish: ${{ needs.meta.outputs.sha }}
+          files: dist/*
+          body_path: ${{ steps.final_notes_stable.outputs.path }}
+          generate_release_notes: false
+          fail_on_unmatched_files: true
+          prerelease: false
+
   changelog:
     needs: meta
     runs-on: ubuntu-latest
-    # This job must never block the release
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -382,38 +487,31 @@ jobs:
           CHANGELOG="${CHANGELOG_DIR}/${BUILD_NUMBER}.txt"
           WHATSNEW="distribution/whatsnew/whatsnew-en-US"
           BRANCH="chore/fdroid-changelog-${BUILD_NUMBER}"
-
-          # Generate the changelog file
+          
           mkdir -p "$CHANGELOG_DIR"
           if [ -f "$WHATSNEW" ]; then
             cp "$WHATSNEW" "$CHANGELOG"
           else
-            echo "See https://github.com/sunstep/dawarich-android/releases/tag/${TAG}" \
-              > "$CHANGELOG"
+            echo "See https://github.com/sunstep/dawarich-android/releases/tag/${TAG}" > "$CHANGELOG"
           fi
-
-          # Skip if the file already exists on main
+          
           git fetch origin main
           if git show "origin/main:${CHANGELOG}" &>/dev/null; then
             echo "Changelog ${BUILD_NUMBER}.txt already exists on main, skipping."
             exit 0
           fi
-
-          # Save to temp before switching branches
+          
           cp "$CHANGELOG" /tmp/changelog.txt
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Create a new branch from main, add the file, force-push, open PR
-          # Force-push handles retries where the branch already exists from a previous failed run
+          
           git checkout -b "$BRANCH" origin/main
           mkdir -p "$(dirname "$CHANGELOG")"
           cp /tmp/changelog.txt "$CHANGELOG"
           git add "$CHANGELOG"
           git commit -m "chore: add F-Droid changelog for build ${BUILD_NUMBER} [skip ci]"
           git push --force origin "$BRANCH"
-
-          # Only create a PR if one doesn't already exist for this branch
+          
           EXISTING_PR=$(gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number // empty')
           if [ -n "$EXISTING_PR" ]; then
             echo "PR #${EXISTING_PR} already exists for branch ${BRANCH}, skipping creation."
@@ -428,10 +526,8 @@ jobs:
             PR_NUMBER=$(echo "$PR_URL" | grep -oE '[0-9]+$')
             echo "Created PR #${PR_NUMBER}"
           fi
-
-          # Merge the PR: try auto-merge first, fall back to immediate merge if PR is already clean
+          
           if ! gh pr merge "$PR_NUMBER" --auto --squash --delete-branch 2>/dev/null; then
             echo "Auto-merge unavailable (PR may already be clean). Merging immediately."
             gh pr merge "$PR_NUMBER" --squash --delete-branch
           fi
-

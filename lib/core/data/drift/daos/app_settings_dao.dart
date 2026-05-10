@@ -71,6 +71,20 @@ class AppSettingsDao extends DatabaseAccessor<SQLiteClient>
     ));
   }
 
+  Future<int> getTimelineDistanceThreshold(int userId) async {
+    final row = await getSettings(userId);
+    return row?.timelineDistanceThreshold ?? 50;
+  }
+
+  Future<void> setTimelineDistanceThreshold(int userId, int meters) async {
+    await _ensureRow(userId);
+    await (update(db.appSettingsTable)
+          ..where((t) => t.userId.equals(userId)))
+        .write(AppSettingsTableCompanion(
+      timelineDistanceThreshold: Value(meters),
+    ));
+  }
+
   /// Ensures a row exists for the given user, inserting defaults if needed.
   Future<void> _ensureRow(int userId) async {
     final existing = await getSettings(userId);

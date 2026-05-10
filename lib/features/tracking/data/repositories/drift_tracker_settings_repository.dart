@@ -27,7 +27,7 @@ final class DriftTrackerSettingsRepository implements ITrackerSettingsRepository
     final TrackerSettings defaults = TrackerSettings(
       userId: userId,
       automaticTracking: false,
-      trackingFrequency: 10,
+      trackingFrequency: 0,
       locationPrecision: LocationPrecision.high,
       minimumPointDistance: 0,
       pointsPerBatch: 50,
@@ -67,7 +67,7 @@ final class DriftTrackerSettingsRepository implements ITrackerSettingsRepository
     final TrackerSettings defaults = TrackerSettings(
       userId: userId,
       automaticTracking: false,
-      trackingFrequency: 10,
+      trackingFrequency: 0,
       locationPrecision: LocationPrecision.high,
       minimumPointDistance: 0,
       pointsPerBatch: 50,

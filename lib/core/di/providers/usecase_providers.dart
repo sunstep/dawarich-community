@@ -2,6 +2,7 @@ import 'package:dawarich/core/application/usecases/api/delete_point_usecase.dart
 import 'package:dawarich/core/application/usecases/api/get_points_usecase.dart';
 import 'package:dawarich/core/application/usecases/api/get_total_pages_usecase.dart';
 import 'package:dawarich/features/batch/application/usecases/batch_upload_workflow_usecase.dart';
+import 'package:dawarich/features/batch/application/usecases/check_and_upload_expired_batch_usecase.dart';
 import 'package:dawarich/features/batch/application/usecases/check_batch_threshold_usecase.dart';
 import 'package:dawarich/features/batch/application/usecases/get_current_batch_usecase.dart';
 import 'package:dawarich/features/stats/application/repositories/countries_repository_interfaces.dart';
@@ -25,6 +26,7 @@ import 'package:dawarich/features/tracking/application/usecases/point_creation/c
 import 'package:dawarich/features/tracking/data/repositories/location_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core_providers.dart';
+import 'settings_providers.dart';
 import 'package:dawarich/core/data/repositories/drift/drift_local_point_repository.dart';
 import 'package:dawarich/core/data/repositories/drift/drift_track_repository.dart';
 import 'package:dawarich/core/data/repositories/local_point_repository_interfaces.dart';
@@ -212,6 +214,15 @@ final getBatchPointCountUseCaseProvider = FutureProvider<GetBatchPointCountUseCa
   return GetBatchPointCountUseCase(repo);
 });
 
+final checkAndUploadExpiredBatchUseCaseProvider = FutureProvider<CheckAndUploadExpiredBatchUseCase>((ref) async {
+  final getSettings = await ref.watch(getTrackerSettingsUseCaseProvider.future);
+  final localRepo = await ref.watch(pointLocalRepositoryProvider.future);
+  final getCurrentBatch = await ref.watch(getCurrentBatchUseCaseProvider.future);
+  final batchUploadWorkflow = await ref.watch(batchUploadWorkflowUseCaseProvider.future);
+
+  return CheckAndUploadExpiredBatchUseCase(getSettings, localRepo, getCurrentBatch, batchUploadWorkflow);
+});
+
 final getLastPointUseCaseProvider = FutureProvider<GetLastPointUseCase>((ref) async {
   final repo = await ref.watch(pointLocalRepositoryProvider.future);
   return GetLastPointUseCase(repo);
@@ -307,6 +318,7 @@ final loadTimelineUseCaseProvider = FutureProvider<LoadTimelineUseCase>((ref) as
   return LoadTimelineUseCase(
     await ref.watch(apiPointRepositoryProvider.future),
     ref.watch(timelinePointsProcessorProvider),
+    await ref.watch(getTimelineDistanceThresholdUseCaseProvider.future),
   );
 });
 

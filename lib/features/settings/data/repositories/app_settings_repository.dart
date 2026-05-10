@@ -45,4 +45,14 @@ final class AppSettingsRepository implements IAppSettingsRepository {
   Future<void> setThemeMode(int userId, String mode) {
     return _local.setThemeMode(userId, mode);
   }
+
+  @override
+  Future<int> getTimelineDistanceThreshold(int userId) {
+    return _local.getTimelineDistanceThreshold(userId);
+  }
+
+  @override
+  Future<void> setTimelineDistanceThreshold(int userId, int meters) {
+    return _local.setTimelineDistanceThreshold(userId, meters);
+  }
 }

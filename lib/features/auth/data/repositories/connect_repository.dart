@@ -2,6 +2,7 @@ import 'package:dawarich/features/auth/data/data_transfer_objects/users/user_dto
 import 'package:dawarich/features/auth/application/repositories/connect_repository_interfaces.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:native_dio_adapter/native_dio_adapter.dart';
 import 'package:option_result/option_result.dart';
 
 final class ConnectRepository implements IConnectRepository {
@@ -25,7 +26,9 @@ final class ConnectRepository implements IConnectRepository {
       },
     );
 
-    return Dio(options);
+    final dioClient = Dio(options);
+    dioClient.httpClientAdapter = NativeAdapter();
+    return dioClient;
   }
 
   @override

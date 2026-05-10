@@ -5,6 +5,7 @@ import 'package:dawarich/core/domain/models/point/local/local_point.dart';
 import 'package:dawarich/core/domain/models/point/point_pair.dart';
 import 'package:dawarich/core/presentation/safe_change_notifier.dart';
 import 'package:dawarich/features/batch/application/usecases/watch_current_batch_usecase.dart';
+import 'package:dawarich/features/settings/application/usecases/get_timeline_distance_threshold_usecase.dart';
 import 'package:dawarich/features/timeline/application/helpers/timeline_points_processor.dart';
 import 'package:dawarich/features/timeline/application/usecases/get_default_map_center_usecase.dart';
 import 'package:dawarich/features/timeline/application/usecases/load_timeline_usecase.dart';
@@ -16,12 +17,14 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 
+
 final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   final int userId;
   final LoadTimelineUseCase _loadTimelineUseCase;
   final TimelinePointsProcessor _timelinePointsProcessor;
   final GetDefaultMapCenterUseCase _getDefaultMapCenterUseCase;
   final WatchCurrentBatchUseCase _watchCurrentBatch;
+  final GetTimelineDistanceThresholdUseCase _getDistanceThreshold;
 
   AnimatedMapController? animatedMapController;
 
@@ -31,10 +34,13 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
     this._timelinePointsProcessor,
     this._getDefaultMapCenterUseCase,
     this._watchCurrentBatch,
+    this._getDistanceThreshold,
   );
 
   bool _isLoading = true;
   bool get isLoading => _isLoading;
+
+  int _distanceThreshold = 50;
 
   LatLng? _currentLocation;
   LatLng? get currentLocation => _currentLocation;
@@ -45,10 +51,19 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   final double _epsilon = 1e-7;
   final double _epsilonMeters = 5.0;
 
+  /// Timestamp (ms since epoch) of the chronologically last API point loaded
+  /// for the current day.  Used as the cutoff when rebuilding local points so
+  /// batch points that already exist in the API never overlap the orange trail.
+  int? _lastApiTimestampMs;
+
   DateTime _selectedDate = DateTime.now();
   DateTime get selectedDate => _selectedDate;
 
   StreamSubscription<List<LocalPoint>>? _localPointSubscription;
+
+  /// Tracks the last-seen batch size so we can detect a post-upload cleanup
+  /// (large drop) and silently reload the API track.
+  int _lastBatchSize = 0;
 
   List<LatLng> _points = [];
   List<LatLng> get points => _points;
@@ -96,6 +111,7 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
 
   void clearPoints() {
     _points.clear();
+    _lastApiTimestampMs = null;
     safeNotifyListeners();
   }
 
@@ -106,6 +122,9 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
     final pending = _pendingCenter;
     if (pending != null) {
       _pendingCenter = null;
+      // Clear the target guard so the deferred call in _animateTo isn't
+      // blocked by a stale _lastCameraTarget value.
+      _lastCameraTarget = null;
       _animateTo(pending);
     }
   }
@@ -140,37 +159,75 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
       return;
     }
 
-    final AnimatedMapController? controller = animatedMapController;
-
-    if (!_mapReady || controller == null) {
+    if (!_mapReady || animatedMapController == null) {
       _pendingCenter = dest;
       return;
     }
 
-    final double zoom = controller.mapController.camera.zoom;
-
-    animatedMapController?.animateTo(
-      dest: dest,
-      zoom: zoom,
-      curve: Curves.easeInOut,
-      duration: const Duration(milliseconds: 500),
-    );
-
+    // Record the target NOW (before the postFrameCallback) so that rapid
+    // consecutive calls (e.g., setPoints → setLocalPoints → animateTo) don't
+    // all enqueue duplicate animation frames.
     _lastCameraTarget = dest;
+
+    // Defer the actual camera move until after the current frame's build phase
+    // has completed.  notifyListeners() (called just before _animateTo) marks
+    // the ListenableBuilder dirty and schedules a rebuild; if we call
+    // animateTo() synchronously, FlutterMap.didUpdateWidget fires on the very
+    // next frame and can reset / cancel the in-flight animation.
+    // addPostFrameCallback guarantees we start moving after that rebuild.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (isDisposed) return;
+      final controller = animatedMapController;
+      if (controller == null) return;
+
+      try {
+        final double zoom = controller.mapController.camera.zoom;
+        controller.animateTo(
+          dest: dest,
+          zoom: zoom,
+          curve: Curves.easeInOut,
+          duration: const Duration(milliseconds: 500),
+        );
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('[TimelineViewModel] _animateTo failed: $e');
+        }
+      }
+    });
   }
 
   Future<void> initialize() async {
+    _distanceThreshold = await _getDistanceThreshold(userId);
     _resolveAndSetInitialLocation();
     await loadToday();
 
-    if (isDisposed) return;
+    if (isDisposed) {
+      return;
+    }
 
     try {
       final batchStream = _watchCurrentBatch(userId);
       _localPointSubscription = batchStream.listen((points) {
-        if (isDisposed) return;
+        if (isDisposed) {
+          return;
+        }
+
+        final previousSize = _lastBatchSize;
+        final previousBatch = _lastLocalBatch;
+        _lastBatchSize = points.length;
         _lastLocalBatch = points;
-        _rebuildLocalPoints();
+
+        _rebuildLocalPoints(cutoffMs: _lastApiTimestampMs);
+
+        // A large drop means the upload workflow just ran its cleanup.
+        // Move the uploaded local points directly into the API track so the
+        // transition is seamless without any network call.
+        final significantDrop =
+            previousSize > 5 && points.length < previousSize ~/ 2;
+
+        if (significantDrop && isTodaySelected()) {
+          _mergeUploadedLocalPointsIntoApiTrack(previousBatch);
+        }
       });
     } catch (e, s) {
       if (kDebugMode) {
@@ -179,13 +236,52 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
     }
   }
 
+
+  /// Moves uploaded local points directly into the API track so the blue trail
+  /// fills in immediately without a network reload.
+  void _mergeUploadedLocalPointsIntoApiTrack(List<LocalPoint> uploadedBatch) {
+    final d = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
+    final cutoffMs = _lastApiTimestampMs;
+
+    final toMerge = uploadedBatch.where((p) {
+      final ts = p.properties.recordTimestamp;
+      final day = DateTime(ts.year, ts.month, ts.day);
+      if (day != d) {
+        return false;
+      }
+      if (cutoffMs != null && ts.millisecondsSinceEpoch <= cutoffMs) {
+        return false;
+      }
+      return true;
+    }).toList()
+      ..sort((a, b) =>
+          a.properties.recordTimestamp.compareTo(b.properties.recordTimestamp));
+
+    if (toMerge.isEmpty) {
+      return;
+    }
+
+    final merged = toMerge
+        .map((p) => LatLng(p.geometry.latitude, p.geometry.longitude))
+        .toList();
+
+    // Advance the cutoff so these points are excluded from the orange trail.
+    _lastApiTimestampMs =
+        toMerge.last.properties.recordTimestamp.millisecondsSinceEpoch;
+
+    setPoints([..._points, ...merged]);
+    _rebuildLocalPoints(cutoffMs: _lastApiTimestampMs);
+  }
+
   void _rebuildLocalPoints({int? cutoffMs}) {
     final d = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
 
     final slim = _lastLocalBatch.where((p) {
       final ts = p.properties.recordTimestamp;
       final day = DateTime(ts.year, ts.month, ts.day);
-      if (day != d) return false;
+      if (day != d) {
+        return false;
+      }
 
       if (cutoffMs != null && ts.millisecondsSinceEpoch <= cutoffMs) {
         return false;
@@ -199,24 +295,30 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
 
     slim.sort((a, b) => a.timestamp!.compareTo(b.timestamp!));
 
-    final List<LatLng> local = _timelinePointsProcessor.processPoints(slim);
+    final List<LatLng> local = _timelinePointsProcessor.processPoints(
+      slim,
+      distanceThresholdMeters: _distanceThreshold,
+    );
 
-    setLocalPoints(local);
-    _stitchLocalPoints();
+    List<LatLng> stitched = _stitchToApiPoints(local);
+
+
+    setLocalPoints(stitched);
   }
 
-  void _stitchLocalPoints() {
-    if (_points.isNotEmpty && _localPoints.isNotEmpty) {
-      final firstLocalPoint = _localPoints.first;
-      final lastApiPoint = _points.last;
+  /// Returns [local] prepended with the last API point when the two trails
+  /// are more than [_epsilonMeters] apart, bridging any spatial gap.
+  List<LatLng> _stitchToApiPoints(List<LatLng> local) {
+    if (_points.isEmpty || local.isEmpty) return local;
 
-      PointPair pair = PointPair(lastApiPoint, firstLocalPoint);
-      final distance = pair.calculateDistance();
+    final lastApiPoint = _points.last;
+    final firstLocalPoint = local.first;
 
-      if (distance > _epsilonMeters) {
-        _localPoints.insert(0, lastApiPoint);
-      }
+    final distance = PointPair(lastApiPoint, firstLocalPoint).calculateDistance();
+    if (distance > _epsilonMeters) {
+      return [lastApiPoint, ...local];
     }
+    return local;
   }
 
   @override
@@ -236,14 +338,30 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   }
 
   Future<void> getAndSetPoints() async {
-    final DayMapData day = await _loadTimelineUseCase(selectedDate);
+    final DayMapData day = await _loadTimelineUseCase(selectedDate, userId);
     if (isDisposed) return;
+
+    // Store the cutoff so the live-batch subscription uses the same boundary.
+    _lastApiTimestampMs = day.lastTimestampMs;
 
     setPoints(day.points);
     _rebuildLocalPoints(cutoffMs: day.lastTimestampMs);
 
-    if (day.points.isNotEmpty) {
-      _animateTo(day.points.first);
+    // Reset so the deduplication guard never blocks an explicit day-load animation.
+    _lastCameraTarget = null;
+
+    if (isTodaySelected()) {
+      // Today: animate to the most recent point (live local points take priority)
+      if (_localPoints.isNotEmpty) {
+        _animateTo(_localPoints.last);
+      } else if (day.points.isNotEmpty) {
+        _animateTo(day.points.last);
+      }
+    } else {
+      // Other days: animate to the first point of the day
+      if (day.points.isNotEmpty) {
+        _animateTo(day.points.first);
+      }
     }
   }
 
@@ -342,24 +460,24 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   Future<void> centerMap() async {
     if (isDisposed) return;
 
-    final controller = animatedMapController;
-
-    if (!_mapReady || controller == null) {
+    if (!_mapReady || animatedMapController == null) {
       return;
     }
 
     LatLng? userLocation;
     try {
-      final position = await Geolocator.getCurrentPosition();
-      userLocation = LatLng(position.latitude, position.longitude);
-    } catch (_) {
       final last = await Geolocator.getLastKnownPosition();
       if (last != null) {
         userLocation = LatLng(last.latitude, last.longitude);
       }
-    }
+    } catch (_) {}
 
     if (isDisposed || userLocation == null) {
+      return;
+    }
+
+    final controller = animatedMapController;
+    if (controller == null) {
       return;
     }
 

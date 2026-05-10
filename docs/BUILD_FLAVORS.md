@@ -64,7 +64,7 @@ configurations.matching { it.name.toLowerCase().contains("foss") }.configureEach
 The `FLAVOR_DISTRIBUTION` is exposed to Dart via a method channel in `MainActivity.kt`:
 
 ```kotlin
-MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.sunstep.dawarich/build_config")
+MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.sunstep.travel/build_config")
     .setMethodCallHandler { call, result ->
         when (call.method) {
             "getFlavor" -> result.success(BuildConfig.FLAVOR_DISTRIBUTION)

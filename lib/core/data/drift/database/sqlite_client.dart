@@ -210,7 +210,7 @@ final class SQLiteClient extends _$SQLiteClient {
   }
 
 
-  static const int kSchemaVersion = 9;
+  static const int kSchemaVersion = 10;
   @override
   int get schemaVersion => kSchemaVersion;
 

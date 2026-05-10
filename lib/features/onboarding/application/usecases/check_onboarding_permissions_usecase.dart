@@ -9,7 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 /// of [PermissionItem]s with their granted/denied state.
 final class CheckOnboardingPermissionsUseCase {
   static const MethodChannel _channel =
-      MethodChannel('com.sunstep.dawarich/system_settings');
+      MethodChannel('com.sunstep.travel/system_settings');
 
   Future<List<PermissionItem>> call() async {
     final notificationGranted = await Permission.notification.isGranted;

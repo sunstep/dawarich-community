@@ -2,6 +2,7 @@ import 'package:auto_route/auto_route.dart';
 import 'package:dawarich/core/di/providers/auth_providers.dart';
 import 'package:dawarich/core/routing/app_router.dart';
 import 'package:dawarich/core/theme/app_gradients.dart';
+import 'package:dawarich/features/auth/domain/models/auth_qr_payload.dart';
 import 'package:dawarich/features/auth/presentation/viewmodels/auth_page_viewmodel.dart';
 import 'package:dawarich/features/auth/presentation/widgets/connect_steps.dart';
 import 'package:flutter/material.dart';
@@ -236,6 +237,25 @@ final class _HostedBody extends StatelessWidget {
     required this.onSignIn,
   });
 
+  Future<void> _scanQr(BuildContext context) async {
+    FocusScope.of(context).unfocus();
+    final String? qrResult =
+        await context.router.push<String>(const AuthQrScanRoute());
+    if (qrResult == null) return;
+
+    // Try full payload first ({"server_url":…,"api_key":…}),
+    // then fall back to treating the raw string as an API key.
+    String apiKey;
+    try {
+      final payload = AuthQrPayload.fromJsonString(qrResult.trim());
+      apiKey = payload.apiKey;
+    } on FormatException {
+      apiKey = qrResult.trim();
+    }
+
+    vm.setApiKey(apiKey);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -288,11 +308,21 @@ final class _HostedBody extends StatelessWidget {
                   const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
               border:
                   OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              suffixIcon: IconButton(
-                icon: Icon(vm.apiKeyVisible
-                    ? Icons.visibility
-                    : Icons.visibility_off),
-                onPressed: () => vm.setApiKeyVisibility(!vm.apiKeyVisible),
+              suffixIcon: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    tooltip: 'Scan QR',
+                    icon: const Icon(Icons.qr_code_scanner),
+                    onPressed: busy ? null : () => _scanQr(context),
+                  ),
+                  IconButton(
+                    icon: Icon(vm.apiKeyVisible
+                        ? Icons.visibility
+                        : Icons.visibility_off),
+                    onPressed: () => vm.setApiKeyVisibility(!vm.apiKeyVisible),
+                  ),
+                ],
               ),
             ),
             validator: (v) =>
