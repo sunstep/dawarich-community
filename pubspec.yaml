@@ -37,7 +37,11 @@ dependencies:
   flutter_zxing: ^2.2.1
   freezed_annotation: ^3.1.0
 
-  geolocator: ^14.0.2
+  # FOSS geolocator: force fork
+  geolocator:
+    git:
+      url: https://github.com/sunstep/flutter-geolocator.git
+      path: geolocator
 
   intl: ^0.20.2
   json_annotation: ^4.10.0
@@ -81,3 +85,23 @@ flutter_icons:
 
 flutter:
   uses-material-design: true
+
+# Hard override the whole federated stack to the fork (FOSS-safe)
+dependency_overrides:
+  geolocator:
+    git:
+      url: https://github.com/sunstep/flutter-geolocator.git
+      path: geolocator
+  geolocator_android:
+    git:
+      url: https://github.com/sunstep/flutter-geolocator.git
+      path: geolocator_android
+  geolocator_platform_interface:
+    git:
+      url: https://github.com/sunstep/flutter-geolocator.git
+      path: geolocator_platform_interface
+  cronet_http:
+    git:
+      url: https://github.com/sunstep/http.git
+      ref: master
+      path: pkgs/cronet_http

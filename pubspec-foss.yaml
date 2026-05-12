@@ -100,3 +100,8 @@ dependency_overrides:
     git:
       url: https://github.com/sunstep/flutter-geolocator.git
       path: geolocator_platform_interface
+  cronet_http:
+    git:
+      url: https://github.com/sunstep/http.git
+      ref: master
+      path: pkgs/cronet_http
