@@ -155,11 +155,65 @@ class _AuthFormCardState extends State<_AuthFormCard> {
     }
   }
 
+  /// Shows a warning dialog when the user enters an http:// URL.
+  /// Returns true if the user chooses to proceed, false if they cancel.
+  Future<bool> _showHttpWarningDialog(BuildContext context) async {
+    return await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            icon: const Icon(Icons.warning_amber_rounded, size: 40),
+            iconColor: Colors.orange,
+            title: const Text('Insecure Connection'),
+            content: const Text(
+              'You are connecting over HTTP, which is unencrypted. '
+              'Your API key and location data may be exposed to third parties.\n\n'
+              'It is strongly recommended to use HTTPS instead.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Go Back'),
+              ),
+              TextButton(
+                style: TextButton.styleFrom(foregroundColor: Colors.orange),
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Continue Anyway'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+  }
+
   Future<void> _handleSelfHostedContinue(BuildContext context) async {
     if (vm.currentStep == 0) {
       if (!(_hostFormKey.currentState?.validate() ?? false)) return;
-      final ok = await vm.testHost(vm.hostController.text.trim());
-      if (ok) vm.goToNextStep();
+      final host = vm.hostController.text.trim();
+
+      if (host.toLowerCase().startsWith('http://')) {
+        final proceed = await _showHttpWarningDialog(context);
+        if (!proceed) return;
+        final ok = await vm.testHost(host);
+        if (ok) vm.goToNextStep();
+        return;
+      }
+
+
+      final ok = await vm.testHost(host);
+      if (!ok) return;
+
+      final resolvedHost = vm.hostController.text.trim();
+      if (resolvedHost.toLowerCase().startsWith('http://')) {
+        if (!context.mounted) return;
+        final proceed = await _showHttpWarningDialog(context);
+        if (!proceed) {
+          vm.resetHostVerification();
+          return;
+        }
+      }
+
+      vm.goToNextStep();
       return;
     }
 

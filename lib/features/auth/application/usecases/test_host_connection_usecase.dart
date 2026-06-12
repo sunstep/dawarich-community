@@ -1,14 +1,17 @@
-
 import 'package:dawarich/core/application/errors/failure.dart';
 import 'package:dawarich/features/auth/application/repositories/connect_repository_interfaces.dart';
 import 'package:flutter/foundation.dart';
 import 'package:option_result/result.dart';
 
 final class TestHostConnectionUseCase {
-
   final IConnectRepository _connectRepository;
 
   TestHostConnectionUseCase(this._connectRepository);
+
+  bool _hasProtocol(String host) {
+    final lowerHost = host.toLowerCase();
+    return lowerHost.startsWith("http://") || lowerHost.startsWith("https://");
+  }
 
   /// Returns Ok(normalizedHostWithProtocol) when reachable.
   /// Returns Err(Failure) otherwise.
@@ -28,13 +31,11 @@ final class TestHostConnectionUseCase {
 
     var cleaned = normalizedInput;
 
-    // remove trailing slash
-    if (cleaned.endsWith("/")) {
-      cleaned = cleaned.substring(0, cleaned.length - 1);
-    }
+    // remove trailing slashes
+    cleaned = cleaned.replaceAll(RegExp(r'/+$'), '');
 
     // User provided protocol -> test as-is
-    if (cleaned.startsWith("http://") || cleaned.startsWith("https://")) {
+    if (_hasProtocol(cleaned)) {
       final ok = await _connectRepository.testHost(cleaned);
 
       if (ok) {
