@@ -69,13 +69,15 @@ android {
         }
     }
 
+    def requireReleaseSigning = System.getenv("REQUIRE_RELEASE_SIGNING") == "true"
+
     buildTypes {
         release {
 
             if (hasKeystore) {
                 signingConfig signingConfigs.release
-            } else {
-                signingConfig signingConfigs.debug
+            } else if (requireReleaseSigning) {
+                throw new GradleException("Release keystore is missing. Refusing to build official release with debug signing.")
             }
 
             // optimizations
