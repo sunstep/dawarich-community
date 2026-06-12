@@ -445,68 +445,86 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   Future<Result<(), String>> toggleAutomaticTracking(bool enable) async {
 
     if (_isUpdatingTracking) {
-      return Err("Tracking update already in progress.");
+      return Err("Tracking toggle already in progress.");
     }
+
     setIsUpdatingTracking(true);
-    await Future.delayed(const Duration(milliseconds: 500));
-    setAutomaticTracking(enable);
 
     if (enable) {
-      final bool shouldShowConsentDialog = await _shouldShowConsentDialog();
-      if (shouldShowConsentDialog) {
-        final bool confirmed = await requestConsentFromUser(
-            'To enable automatic background tracking, Dawarich needs your permission.\n\n'
-                'It will request background location access, notification permission, and system exclusions.'
-        );
-
-        if (!confirmed) {
-          await setAutomaticTracking(false);
-          setIsUpdatingTracking(false);
-          return Err("Permission setup cancelled by user.");
-        }
-      }
-
-      final permissionResult = await _requestTrackingPermissions();
-      if (permissionResult case Err(value: final message)) {
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-        return Err(message);
-      }
-
-      final notificationGranted = await _requestNotificationPermission();
-      if (!notificationGranted) {
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-        return Err("Notification permission is required.");
-      }
-
-      final serviceResult = await BackgroundTrackingService.start();
-      await _openSystemSettings();
-      await setAutomaticTracking(enable);
-      debugPrint("[TrackerPageViewModel] Background start result: $serviceResult");
-
-      final needsFix = await _checkSystemSettings();
-
-      if (serviceResult case Err(value: final message)) {
-        if (needsFix) {
-          _consentPromptController.add(
-              'Some system settings still need your help to enable reliable background tracking.\n\n'
-                  'Please check location permission, battery optimization, and notification settings.'
-          );
-        }
-
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-
-        return Err("Failed to start background service: $message");
-      }
-
+      await enableAutomaticTracking();
     } else {
-      BackgroundTrackingService.stop();
+      await disableAutomaticTracking();
     }
+
+    await setAutomaticTracking(enable);
 
     setIsUpdatingTracking(false);
     return Ok(());
+  }
+
+  Future<Result<(), String>> enableAutomaticTracking() async {
+
+    final bool shouldShowConsentDialog = await _shouldShowConsentDialog();
+
+    if (shouldShowConsentDialog) {
+
+      final bool confirmed = await requestConsentFromUser(
+        'To enable automatic background tracking, Dawarich Community needs '
+            'background location and notification permissions.\n\n'
+            'You may also be asked to adjust optional device settings to improve '
+            'background tracking reliability.',
+      );
+
+      if (!confirmed) {
+        return Err("Permission setup cancelled.");
+      }
+    }
+
+    final permissionResult = await _requestTrackingPermissions();
+
+    if (permissionResult case Err(value: final message)) {
+      return Err(message);
+    }
+
+    final notificationGranted = await _requestNotificationPermission();
+    if (!notificationGranted) {
+      return Err("Notification permission is required.");
+    }
+
+    final serviceResult = await BackgroundTrackingService.start();
+
+    if (kDebugMode){
+      debugPrint("[TrackerPageViewModel] Background start result: $serviceResult");
+    }
+
+    if (serviceResult case Err(value: final message)) {
+
+      return Err("Failed to start background service: $message");
+    }
+
+    final needsFix = await _checkSystemSettings();
+
+    if (needsFix) {
+
+      final shouldOpenSettings = await requestConsentFromUser(
+        'Automatic tracking has started successfully.\n\n'
+            'Some optional device settings may improve background tracking '
+            'reliability, especially when Dawarich Community runs in the '
+            'background.\n\n'
+            'Would you like to review these settings now?',
+      );
+
+      if (shouldOpenSettings) {
+        await _openSystemSettings();
+      }
+
+    }
+
+    return Ok(());
+  }
+
+  Future<void> disableAutomaticTracking() async {
+    await BackgroundTrackingService.stop();
   }
 
   Future<Result<(), String>> _requestTrackingPermissions() async {
