@@ -185,7 +185,7 @@ final class CreatePointUseCase {
       wifi: wifi,
       batteryState: batteryState,
       batteryLevel: batteryLevel,
-      trackingMode: TrackingMode.manual, // TODO: Pass tracking mode from caller
+      trackingMode: TrackingMode.timer, // TODO: Pass tracking mode from caller
     );
   }
 
