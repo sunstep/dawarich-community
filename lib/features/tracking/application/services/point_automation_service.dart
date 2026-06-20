@@ -6,6 +6,7 @@ import 'package:dawarich/features/tracking/application/usecases/get_batch_point_
 import 'package:dawarich/features/tracking/application/usecases/notifications/show_tracker_notification_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_from_location_stream_workflow.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/store_point_usecase.dart';
+import 'package:dawarich/features/tracking/application/usecases/settings/get_tracker_settings_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/watch_tracker_settings_usecase.dart';
 import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
 import 'package:flutter/foundation.dart';
@@ -25,44 +26,55 @@ final class PointAutomationService {
   DateTime? _lastPointTime;
   int _lastKnownBatchCount = 0;
 
-  /// Heartbeat interval for re-posting the notification so aggressive OEMs
-  /// (Xiaomi, Huawei, Samsung) don't kill the foreground service.
-  /// Uses the cached batch count — no DB query.
+  /// re-send the notification every:
   static const _heartbeatInterval = Duration(seconds: 60);
 
+  final ITrackerEngine _trackerEngine;
   final CreatePointFromLocationStreamWorkflow _createPointFromLocationStream;
   final StorePointUseCase _storePoint;
   final GetBatchPointCountUseCase _getBatchPointCount;
   final ShowTrackerNotificationUseCase _showTrackerNotification;
   final GetCurrentBatchUseCase _getCurrentBatch;
   final BatchUploadWorkflowUseCase _batchUploadWorkflow;
+  final GetTrackerSettingsUseCase _getTrackerSettings;
   final WatchTrackerSettingsUseCase _watchTrackerSettings;
   final IPointLocalRepository _localPointRepository;
 
   PointAutomationService(
+    this._trackerEngine,
     this._createPointFromLocationStream,
     this._storePoint,
     this._getBatchPointCount,
     this._showTrackerNotification,
     this._getCurrentBatch,
     this._batchUploadWorkflow,
+    this._getTrackerSettings,
     this._watchTrackerSettings,
     this._localPointRepository,
   );
 
-  /// Whether automatic tracking is currently active
   bool get isTracking => _isTracking;
 
   Future<void> startTracking(int userId) async {
-    if (_isTracking) return;
+
+    if (_isTracking) {
+      return;
+    }
 
     if (kDebugMode) {
       debugPrint("[PointAutomation] Starting automatic tracking with location stream...");
     }
 
+
+
     _isTracking = true;
     _currentUserId = userId;
     _lastPointTime = null;
+
+    final TrackerSettings settings = await _getTrackerSettings(userId);
+
+    await _trackerEngine.configure();
+    await _trackerEngine.start();
 
     await _refreshNotification(userId);
 
@@ -339,11 +351,16 @@ final class PointAutomationService {
   // ── Lifecycle ──────────────────────────────────────────────────────────
 
   Future<void> stopTracking() async {
-    if (!_isTracking) return;
+
+    if (!_isTracking) {
+      return;
+    }
 
     if (kDebugMode) {
       debugPrint("[PointAutomation] Stopping automatic tracking...");
     }
+
+    await tl.Tracelet.stop();
 
     _isTracking = false;
     _currentUserId = null;
@@ -363,7 +380,10 @@ final class PointAutomationService {
   }
 
   Future<void> restartTracking() async {
-    if (!_isTracking || _currentUserId == null) return;
+
+    if (!_isTracking || _currentUserId == null) {
+      return;
+    }
 
     final userId = _currentUserId!;
 
