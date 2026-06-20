@@ -8,7 +8,7 @@ import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:tracelet/tracelet.dart' as tl;
 
-final class TrackerEngine implements ITrackerEngine {
+final class TraceletTrackerEngine implements ITrackerEngine {
 
   static const int _streamLocationUpdateIntervalMs = 5000;
   static const int _fastestStreamLocationUpdateIntervalMs = 2500;

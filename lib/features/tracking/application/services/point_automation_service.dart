@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:dawarich/core/data/repositories/local_point_repository_interfaces.dart';
 import 'package:dawarich/features/batch/application/usecases/batch_upload_workflow_usecase.dart';
 import 'package:dawarich/features/batch/application/usecases/get_current_batch_usecase.dart';
+import 'package:dawarich/features/tracking/application/interfaces/tracker_engine_interface.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_batch_point_count_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/notifications/show_tracker_notification_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_from_location_stream_workflow.dart';
@@ -73,8 +74,8 @@ final class PointAutomationService {
 
     final TrackerSettings settings = await _getTrackerSettings(userId);
 
-    await _trackerEngine.configure();
-    await _trackerEngine.start();
+    await _trackerEngine.configure(settings);
+    await _trackerEngine.startTracking(settings);
 
     await _refreshNotification(userId);
 
@@ -360,7 +361,6 @@ final class PointAutomationService {
       debugPrint("[PointAutomation] Stopping automatic tracking...");
     }
 
-    await tl.Tracelet.stop();
 
     _isTracking = false;
     _currentUserId = null;
