@@ -5,7 +5,6 @@ import 'package:dawarich/features/tracking/domain/enum/location_precision.dart';
 import 'package:dawarich/features/tracking/domain/enum/tracking_mode.dart';
 import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
 
-import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:tracelet/tracelet.dart' as tl;
 
