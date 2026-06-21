@@ -13,13 +13,17 @@ import 'package:tracelet/tracelet.dart' as tl;
 
 final class TraceletTrackerEngine implements ITrackerEngine {
 
+  late final int _instanceId = identityHashCode(this);
+
   static const int _streamLocationUpdateIntervalMs = 5000;
   static const int _fastestStreamLocationUpdateIntervalMs = 2500;
 
-  final StreamController<LocationFix> _locationFixController =
+  static final StreamController<LocationFix> _locationFixController =
   StreamController<LocationFix>.broadcast();
 
-  bool _isLocationListenerRegistered = false;
+  static bool _isLocationListenerRegistered = false;
+  static String? _lastLocationUuid;
+
 
   @override
   Stream<LocationFix> watchLocations() {
@@ -30,17 +34,40 @@ final class TraceletTrackerEngine implements ITrackerEngine {
   void _registerLocationListenerOnce() {
 
     if (_isLocationListenerRegistered) {
+      if (kDebugMode) {
+        debugPrint(
+          '[TrackerEngine#$_instanceId] Listener already registered.',
+        );
+      }
+
       return;
     }
 
     _isLocationListenerRegistered = true;
 
+    if (kDebugMode) {
+      debugPrint(
+        '[TrackerEngine#$_instanceId] Registering Tracelet.onLocation listener.',
+      );
+    }
+
     tl.Tracelet.onLocation((tl.Location location) {
+
+      if (_lastLocationUuid == location.uuid) {
+        if (kDebugMode) {
+          debugPrint(
+            '[TrackerEngine#$_instanceId] Duplicate Tracelet location ignored: ${location.uuid}',
+          );
+        }
+
+        return;
+      }
+      _lastLocationUuid = location.uuid;
       final locationFix = _mapLocationFix(location);
 
       if (kDebugMode) {
         debugPrint(
-          '[TrackerEngine] Location fix received: '
+          '[TrackerEngine#$_instanceId] Location fix received: '
               '${locationFix.latitude}, ${locationFix.longitude} '
               'at ${locationFix.timestampUtc.toIso8601String()}',
         );
