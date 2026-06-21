@@ -6,9 +6,11 @@ import 'package:dawarich/features/tracking/application/interfaces/tracker_engine
 import 'package:dawarich/features/tracking/application/usecases/get_batch_point_count_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/notifications/show_tracker_notification_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_from_location_stream_workflow.dart';
+import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/store_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/get_tracker_settings_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/watch_tracker_settings_usecase.dart';
+import 'package:dawarich/features/tracking/domain/models/location_fix.dart';
 import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:option_result/option_result.dart';
@@ -18,12 +20,16 @@ final class PointAutomationService {
   bool _writeBusy = false;
   bool _uploadBusy = false;
   int? _currentUserId;
-  StreamSubscription<Result<dynamic, String>>? _locationStreamSub;
+
+  StreamSubscription<LocationFix>? _locationFixSub;
   StreamSubscription<TrackerSettings>? _settingsWatchSub;
   StreamSubscription<int>? _batchCountSub;
+
   TrackerSettings? _currentSettings;
+
   Timer? _expirationTimer;
   Timer? _heartbeatTimer;
+
   DateTime? _lastPointTime;
   int _lastKnownBatchCount = 0;
 
@@ -32,6 +38,7 @@ final class PointAutomationService {
 
   final ITrackerEngine _trackerEngine;
   final CreatePointFromLocationStreamWorkflow _createPointFromLocationStream;
+  final CreatePointUseCase _createPoint;
   final StorePointUseCase _storePoint;
   final GetBatchPointCountUseCase _getBatchPointCount;
   final ShowTrackerNotificationUseCase _showTrackerNotification;
@@ -44,6 +51,7 @@ final class PointAutomationService {
   PointAutomationService(
     this._trackerEngine,
     this._createPointFromLocationStream,
+    this._createPoint,
     this._storePoint,
     this._getBatchPointCount,
     this._showTrackerNotification,
@@ -66,24 +74,86 @@ final class PointAutomationService {
       debugPrint("[PointAutomation] Starting automatic tracking with location stream...");
     }
 
-
-
-    _isTracking = true;
-    _currentUserId = userId;
-    _lastPointTime = null;
-
     final TrackerSettings settings = await _getTrackerSettings(userId);
 
     await _trackerEngine.configure(settings);
+
+    _currentUserId = userId;
+    _currentSettings = settings;
+    _lastPointTime = null;
+    _lastKnownBatchCount = 0;
+
+    _startLocationFixWatch(userId);
+
     await _trackerEngine.startTracking(settings);
+
+    _isTracking = true;
 
     await _refreshNotification(userId);
 
     _startHeartbeatTimer();
     _startSettingsWatch(userId);
-    _startLocationStream(userId);
     _startBatchCountWatch(userId);
     _syncExpirationTimer(userId);
+  }
+
+  void _startLocationFixWatch(int userId) {
+    _locationFixSub?.cancel();
+
+    _locationFixSub = _trackerEngine.watchLocations().listen(
+          (locationFix) async {
+        await _handleLocationFix(
+          locationFix: locationFix,
+          userId: userId,
+        );
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint(
+          '[PointAutomation] Location fix stream error: '
+              '$error\n$stackTrace',
+        );
+      },
+    );
+  }
+
+  Future<void> _handleLocationFix({
+    required LocationFix locationFix,
+    required int userId,
+  }) async {
+    if (_writeBusy) {
+      if (kDebugMode) {
+        debugPrint('[PointAutomation] Skipping location fix, write busy.');
+      }
+
+      return;
+    }
+
+    _writeBusy = true;
+
+    try {
+      final pointResult = await _createPoint(
+        position: locationFix,
+        timestamp: DateTime.now(),
+        userId: userId,
+      );
+
+      if (pointResult case Ok(value: final point)) {
+
+      } else {
+        final errorResult = pointResult as Err<dynamic, String>;
+
+        debugPrint(
+          '[PointAutomation] Point creation error: ${errorResult.value}',
+        );
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[PointAutomation] Error handling location fix: '
+            '$error\n$stackTrace',
+      );
+    } finally {
+      _writeBusy = false;
+    }
   }
 
   // ── Heartbeat (OEM keep-alive) ─────────────────────────────────────────
@@ -308,7 +378,7 @@ final class PointAutomationService {
   // ── Location stream ────────────────────────────────────────────────────
 
   void _startLocationStream(int userId) {
-    _locationStreamSub?.cancel();
+    _locationFixSub?.cancel();
 
     final pointStream = _createPointFromLocationStream.getPointStream(userId);
 
@@ -330,8 +400,8 @@ final class PointAutomationService {
 
   Future<void> _restartLocationStream(int userId) async {
     try {
-      final oldSub = _locationStreamSub;
-      _locationStreamSub = null;
+      final oldSub = _locationFixSub;
+      _locationFixSub = null;
 
       if (oldSub != null) {
         unawaited(oldSub.cancel().catchError((e) {
@@ -375,8 +445,8 @@ final class PointAutomationService {
     _batchCountSub = null;
     await _settingsWatchSub?.cancel();
     _settingsWatchSub = null;
-    await _locationStreamSub?.cancel();
-    _locationStreamSub = null;
+    await _locationFixSub?.cancel();
+    _locationFixSub = null;
   }
 
   Future<void> restartTracking() async {

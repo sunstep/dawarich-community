@@ -18,8 +18,7 @@ final class PointContext {
   /// Battery level from 0.0 to 1.0.
   final double batteryLevel;
 
-  /// Whether the point was created via automatic tracking or manual action.
-  final TrackingMode trackingMode;
+
 
   /// Optional: platform identifier ("android", "ios") if useful for debugging/analytics.
   final String? platform;
@@ -33,7 +32,6 @@ final class PointContext {
     required this.wifi,
     required this.batteryState,
     required this.batteryLevel,
-    required this.trackingMode,
     this.platform,
     this.source,
   });

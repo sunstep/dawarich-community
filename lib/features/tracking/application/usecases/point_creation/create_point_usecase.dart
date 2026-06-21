@@ -34,8 +34,10 @@ final class CreatePointUseCase {
   );
 
   /// Creates a full point using a position object.
-  Future<Result<LocalPoint, String>> call(
-      LocationFix position, DateTime timestamp, int userId) async {
+  Future<Result<LocalPoint, String>> call({
+    required LocationFix position,
+    required DateTime timestamp,
+    required int userId}) async {
 
     final PointContext context = await _getPointContext(userId);
 
@@ -185,7 +187,6 @@ final class CreatePointUseCase {
       wifi: wifi,
       batteryState: batteryState,
       batteryLevel: batteryLevel,
-      trackingMode: TrackingMode.timer, // TODO: Pass tracking mode from caller
     );
   }
 
