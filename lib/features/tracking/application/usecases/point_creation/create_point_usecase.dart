@@ -9,7 +9,6 @@ import 'package:dawarich/features/tracking/application/repositories/hardware_rep
 import 'package:dawarich/features/tracking/application/repositories/i_track_repository.dart';
 import 'package:dawarich/features/tracking/data/data_transfer_objects/track_dto.dart';
 import 'package:dawarich/features/tracking/domain/enum/battery_state.dart';
-import 'package:dawarich/features/tracking/domain/enum/tracking_mode.dart';
 import 'package:dawarich/features/tracking/domain/models/last_point.dart';
 import 'package:dawarich/features/tracking/domain/models/location_fix.dart';
 import 'package:dawarich/features/tracking/domain/models/point_context.dart';

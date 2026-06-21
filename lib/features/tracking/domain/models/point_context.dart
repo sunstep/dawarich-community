@@ -1,6 +1,4 @@
-
 import 'package:dawarich/features/tracking/domain/enum/battery_state.dart';
-import 'package:dawarich/features/tracking/domain/enum/tracking_mode.dart';
 
 final class PointContext {
 
