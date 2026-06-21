@@ -1,8 +1,11 @@
 
+import 'dart:async';
+
 import 'package:dawarich/core/constants/notification.dart';
 import 'package:dawarich/features/tracking/application/interfaces/tracker_engine_interface.dart';
 import 'package:dawarich/features/tracking/domain/enum/location_precision.dart';
 import 'package:dawarich/features/tracking/domain/enum/tracking_mode.dart';
+import 'package:dawarich/features/tracking/domain/models/location_fix.dart';
 import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
 
 import 'package:flutter/foundation.dart';
@@ -10,8 +13,93 @@ import 'package:tracelet/tracelet.dart' as tl;
 
 final class TraceletTrackerEngine implements ITrackerEngine {
 
+  late final int _instanceId = identityHashCode(this);
+
   static const int _streamLocationUpdateIntervalMs = 5000;
   static const int _fastestStreamLocationUpdateIntervalMs = 2500;
+
+  static final StreamController<LocationFix> _locationFixController =
+  StreamController<LocationFix>.broadcast();
+
+  static bool _isLocationListenerRegistered = false;
+  static String? _lastLocationUuid;
+
+
+  @override
+  Stream<LocationFix> watchLocations() {
+    _registerLocationListenerOnce();
+    return _locationFixController.stream;
+  }
+
+  void _registerLocationListenerOnce() {
+
+    if (_isLocationListenerRegistered) {
+      if (kDebugMode) {
+        debugPrint(
+          '[TrackerEngine#$_instanceId] Listener already registered.',
+        );
+      }
+
+      return;
+    }
+
+    _isLocationListenerRegistered = true;
+
+    if (kDebugMode) {
+      debugPrint(
+        '[TrackerEngine#$_instanceId] Registering Tracelet.onLocation listener.',
+      );
+    }
+
+    tl.Tracelet.onLocation((tl.Location location) {
+
+      if (_lastLocationUuid == location.uuid) {
+        if (kDebugMode) {
+          debugPrint(
+            '[TrackerEngine#$_instanceId] Duplicate Tracelet location ignored: ${location.uuid}',
+          );
+        }
+
+        return;
+      }
+      _lastLocationUuid = location.uuid;
+      final locationFix = _mapLocationFix(location);
+
+      if (kDebugMode) {
+        debugPrint(
+          '[TrackerEngine#$_instanceId] Location fix received: '
+              '${locationFix.latitude}, ${locationFix.longitude} '
+              'at ${locationFix.timestampUtc.toIso8601String()}',
+        );
+      }
+
+      _locationFixController.add(locationFix);
+    });
+  }
+
+  LocationFix _mapLocationFix(tl.Location location) {
+
+    final tl.Coords coords = location.coords;
+
+    return LocationFix(
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      timestampUtc: _parseTimestampUtc(location.timestamp),
+      hAccuracyMeters: coords.accuracy,
+      altitudeMeters: coords.altitude,
+      altitudeAccuracyMeters: coords.altitudeAccuracy,
+      speedMps: coords.speed,
+      speedAccuracyMps: coords.speedAccuracy,
+      headingDegrees: coords.heading,
+      headingAccuracyDegrees: coords.headingAccuracy,
+      provider: location.locationSource,
+      isMocked: location.isMock,
+    );
+  }
+
+  DateTime _parseTimestampUtc(String timestamp) {
+    return DateTime.tryParse(timestamp)?.toUtc() ?? DateTime.now().toUtc();
+  }
 
   // Todo: take ownership of the state model
   @override

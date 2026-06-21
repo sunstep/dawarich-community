@@ -5,33 +5,20 @@ import 'package:dawarich/features/batch/application/usecases/get_current_batch_u
 import 'package:dawarich/features/tracking/application/interfaces/tracker_engine_interface.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_batch_point_count_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/notifications/show_tracker_notification_usecase.dart';
-import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_from_location_stream_workflow.dart';
+import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/store_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/get_tracker_settings_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/watch_tracker_settings_usecase.dart';
+import 'package:dawarich/features/tracking/domain/models/location_fix.dart';
 import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:option_result/option_result.dart';
 
 final class PointAutomationService {
-  bool _isTracking = false;
-  bool _writeBusy = false;
-  bool _uploadBusy = false;
-  int? _currentUserId;
-  StreamSubscription<Result<dynamic, String>>? _locationStreamSub;
-  StreamSubscription<TrackerSettings>? _settingsWatchSub;
-  StreamSubscription<int>? _batchCountSub;
-  TrackerSettings? _currentSettings;
-  Timer? _expirationTimer;
-  Timer? _heartbeatTimer;
-  DateTime? _lastPointTime;
-  int _lastKnownBatchCount = 0;
-
-  /// re-send the notification every:
-  static const _heartbeatInterval = Duration(seconds: 60);
+  bool get isTracking => _isTracking;
 
   final ITrackerEngine _trackerEngine;
-  final CreatePointFromLocationStreamWorkflow _createPointFromLocationStream;
+  final CreatePointUseCase _createPoint;
   final StorePointUseCase _storePoint;
   final GetBatchPointCountUseCase _getBatchPointCount;
   final ShowTrackerNotificationUseCase _showTrackerNotification;
@@ -41,9 +28,23 @@ final class PointAutomationService {
   final WatchTrackerSettingsUseCase _watchTrackerSettings;
   final IPointLocalRepository _localPointRepository;
 
+  bool _isTracking = false;
+  bool _writeBusy = false;
+  bool _uploadBusy = false;
+
+  int? _currentUserId;
+  TrackerSettings? _currentSettings;
+
+  StreamSubscription<LocationFix>? _locationFixSub;
+  StreamSubscription<TrackerSettings>? _settingsWatchSub;
+  StreamSubscription<int>? _batchCountSub;
+
+  DateTime? _lastPointTime;
+  int _lastKnownBatchCount = 0;
+
   PointAutomationService(
     this._trackerEngine,
-    this._createPointFromLocationStream,
+    this._createPoint,
     this._storePoint,
     this._getBatchPointCount,
     this._showTrackerNotification,
@@ -54,55 +55,141 @@ final class PointAutomationService {
     this._localPointRepository,
   );
 
-  bool get isTracking => _isTracking;
-
   Future<void> startTracking(int userId) async {
-
     if (_isTracking) {
       return;
     }
 
     if (kDebugMode) {
-      debugPrint("[PointAutomation] Starting automatic tracking with location stream...");
+      debugPrint('[PointAutomation] Starting automatic tracking...');
     }
-
-
-
-    _isTracking = true;
-    _currentUserId = userId;
-    _lastPointTime = null;
 
     final TrackerSettings settings = await _getTrackerSettings(userId);
 
     await _trackerEngine.configure(settings);
+
+    _currentUserId = userId;
+    _currentSettings = settings;
+    _lastPointTime = null;
+    _lastKnownBatchCount = 0;
+
+    _startLocationFixWatch(userId);
+
     await _trackerEngine.startTracking(settings);
+
+    _isTracking = true;
 
     await _refreshNotification(userId);
 
-    _startHeartbeatTimer();
     _startSettingsWatch(userId);
-    _startLocationStream(userId);
     _startBatchCountWatch(userId);
-    _syncExpirationTimer(userId);
   }
 
-  // ── Heartbeat (OEM keep-alive) ─────────────────────────────────────────
+  Future<void> stopTracking() async {
+    if (!_isTracking) {
+      return;
+    }
 
-  /// Re-posts the notification periodically using cached data (no DB query)
-  /// so aggressive Android OEMs don't kill the foreground service for being
-  /// "idle". This is purely a keep-alive signal.
-  void _startHeartbeatTimer() {
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(
-      _heartbeatInterval,
-      (_) => _refreshNotificationWithCount(_lastKnownBatchCount),
+    if (kDebugMode) {
+      debugPrint('[PointAutomation] Stopping automatic tracking...');
+    }
+
+    await _trackerEngine.stopTracking();
+
+    _isTracking = false;
+    _currentUserId = null;
+    _currentSettings = null;
+    _lastPointTime = null;
+    _lastKnownBatchCount = 0;
+
+    await _locationFixSub?.cancel();
+    _locationFixSub = null;
+
+    await _settingsWatchSub?.cancel();
+    _settingsWatchSub = null;
+
+    await _batchCountSub?.cancel();
+    _batchCountSub = null;
+  }
+
+  Future<void> restartTracking() async {
+    if (!_isTracking || _currentUserId == null) {
+      return;
+    }
+
+    final int userId = _currentUserId!;
+
+    if (kDebugMode) {
+      debugPrint('[PointAutomation] Restarting tracking...');
+    }
+
+    await stopTracking();
+    await startTracking(userId);
+  }
+
+  void _startLocationFixWatch(int userId) {
+    _locationFixSub?.cancel();
+
+    _locationFixSub = _trackerEngine.watchLocations().listen(
+      (locationFix) async {
+        await _handleLocationFix(
+          locationFix: locationFix,
+          userId: userId,
+        );
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        debugPrint(
+          '[PointAutomation] Location fix stream error: '
+          '$error\n$stackTrace',
+        );
+      },
     );
   }
 
-  // ── Notification ───────────────────────────────────────────────────────
+  Future<void> _handleLocationFix({
+    required LocationFix locationFix,
+    required int userId,
+  }) async {
+    if (_writeBusy) {
+      if (kDebugMode) {
+        debugPrint('[PointAutomation] Skipping location fix, write busy.');
+      }
 
-  /// Refreshes the notification. Called reactively when the batch count
-  /// changes or after an upload — not on a timer.
+      return;
+    }
+
+    _writeBusy = true;
+
+    try {
+      final pointResult = await _createPoint(
+        position: locationFix,
+        timestamp: DateTime.now().toUtc(),
+        userId: userId,
+      );
+
+      if (pointResult case Ok(value: final point)) {
+        final storeResult = await _storePoint(point);
+
+        if (storeResult case Ok()) {
+          _lastPointTime = DateTime.now().toUtc();
+          _refreshNotificationWithCount(_lastKnownBatchCount);
+        } else if (storeResult case Err(value: final message)) {
+          debugPrint('[PointAutomation] Failed to store point: $message');
+        }
+      } else if (pointResult case Err(value: final message)) {
+        debugPrint('[PointAutomation] Point creation error: $message');
+      }
+    } catch (error, stackTrace) {
+      debugPrint(
+        '[PointAutomation] Error handling location fix: '
+        '$error\n$stackTrace',
+      );
+    } finally {
+      _writeBusy = false;
+    }
+  }
+
+  // ── Notification ───────────────────────────────────────────────────────
   Future<void> _refreshNotification(int userId) async {
     try {
       final batchCount = await _getBatchPointCount(userId);
@@ -149,7 +236,7 @@ final class PointAutomationService {
 
     _batchCountSub = stream.listen(
       (count) async {
-        // Cache for the heartbeat timer.
+        // Cache for notification updates.
         _lastKnownBatchCount = count;
 
         // Update notification reactively — only when the count actually changes.
@@ -172,72 +259,6 @@ final class PointAutomationService {
         debugPrint('[PointAutomation] Batch count watch error: $e');
       },
     );
-  }
-
-  // ── Expiration timer (time-based, derived from setting) ─────────────────
-
-  /// Starts (or restarts) the expiration timer based on the current setting.
-  /// Only runs when batch expiration is enabled. The check interval equals
-  /// the configured expiration duration — if set to 15m, we check every 15m.
-  /// This is sufficient because the check asks "is the oldest point older
-  /// than N minutes?", so the worst-case delay is N minutes after the actual
-  /// expiration.
-  void _syncExpirationTimer(int userId) {
-    _expirationTimer?.cancel();
-    _expirationTimer = null;
-
-    final settings = _currentSettings;
-    if (settings == null || !settings.isBatchExpirationEnabled) {
-      if (kDebugMode) {
-        debugPrint('[PointAutomation] Expiration timer off (disabled or no settings)');
-      }
-      return;
-    }
-
-    final interval = Duration(minutes: settings.batchExpirationMinutes!);
-
-    _expirationTimer = Timer.periodic(
-      interval,
-      (_) => _checkExpiration(userId),
-    );
-
-    if (kDebugMode) {
-      debugPrint(
-        '[PointAutomation] Expiration timer started '
-        '(interval: ${settings.batchExpirationMinutes}m)',
-      );
-    }
-  }
-
-  /// Checks whether the oldest un-uploaded point has expired according to
-  /// the user's setting.
-  Future<void> _checkExpiration(int userId) async {
-    if (_uploadBusy) return;
-
-    try {
-      final settings = _currentSettings;
-      if (settings == null || !settings.isBatchExpirationEnabled) return;
-
-      final oldest =
-          await _localPointRepository.getOldestUnUploadedPointTimestamp(userId);
-      if (oldest == null) return;
-
-      final threshold = DateTime.now().subtract(
-        Duration(minutes: settings.batchExpirationMinutes!),
-      );
-
-      if (oldest.isBefore(threshold)) {
-        if (kDebugMode) {
-          debugPrint(
-            '[PointAutomation] Batch expired '
-            '(oldest: $oldest, threshold: $threshold) — uploading...',
-          );
-        }
-        await _uploadCurrentBatch(userId);
-      }
-    } catch (e, s) {
-      debugPrint('[PointAutomation] Expiration check error: $e\n$s');
-    }
   }
 
   // ── Upload helper ──────────────────────────────────────────────────────
@@ -273,164 +294,63 @@ final class PointAutomationService {
     _settingsWatchSub?.cancel();
 
     if (kDebugMode) {
-      debugPrint("[PointAutomation] Starting settings watch for userId: $userId");
+      debugPrint(
+        '[PointAutomation] Starting settings watch for userId: $userId',
+      );
     }
 
     _settingsWatchSub = _watchTrackerSettings(userId).listen(
-      (settings) async {
-        final old = _currentSettings;
+          (settings) async {
+        final TrackerSettings? old = _currentSettings;
         _currentSettings = settings;
 
-        if (old != null && _settingsRequireRestart(old, settings)) {
+        if (old == null) {
+          return;
+        }
+
+        if (_settingsRequireEngineRestart(old, settings)) {
           if (kDebugMode) {
-            debugPrint("[PointAutomation] Settings changed (${old.trackingFrequency}s -> ${settings.trackingFrequency}s), restarting location stream...");
+            debugPrint(
+              '[PointAutomation] Scheduler settings changed, restarting tracker engine...',
+            );
           }
-          await _restartLocationStream(userId);
+
+          await _trackerEngine.stopTracking();
+          await _trackerEngine.configure(settings);
+          await _trackerEngine.startTracking(settings);
+
+          return;
         }
 
-        // Re-sync the expiration timer if the expiration setting changed.
-        if (old?.batchExpirationMinutes != settings.batchExpirationMinutes) {
-          _syncExpirationTimer(userId);
+        if (_settingsRequireEngineUpdate(old, settings)) {
+          if (kDebugMode) {
+            debugPrint(
+              '[PointAutomation] Runtime settings changed, updating tracker engine...',
+            );
+          }
+
+          await _trackerEngine.updateConfiguration(settings);
         }
       },
-      onError: (e) {
-        debugPrint("[PointAutomation] Settings watch error: $e");
+      onError: (error) {
+        debugPrint('[PointAutomation] Settings watch error: $error');
       },
     );
   }
 
-  bool _settingsRequireRestart(TrackerSettings old, TrackerSettings current) {
+  bool _settingsRequireEngineRestart(
+      TrackerSettings old,
+      TrackerSettings current,
+      ) {
     return old.trackingFrequency != current.trackingFrequency ||
-           old.locationPrecision != current.locationPrecision ||
-           old.minimumPointDistance != current.minimumPointDistance;
+        old.trackingMode != current.trackingMode;
   }
 
-  // ── Location stream ────────────────────────────────────────────────────
-
-  void _startLocationStream(int userId) {
-    _locationStreamSub?.cancel();
-
-    final pointStream = _createPointFromLocationStream.getPointStream(userId);
-
-    _locationStreamSub = pointStream.listen(
-      (result) async {
-        await _handleLocationUpdate(result, userId);
-      },
-      onError: (error, stackTrace) {
-        debugPrint("[PointAutomation] Stream error: $error\n$stackTrace");
-      },
-      onDone: () {
-        if (kDebugMode) {
-          debugPrint("[PointAutomation] Location stream completed");
-        }
-      },
-      cancelOnError: false,
-    );
-  }
-
-  Future<void> _restartLocationStream(int userId) async {
-    try {
-      final oldSub = _locationStreamSub;
-      _locationStreamSub = null;
-
-      if (oldSub != null) {
-        unawaited(oldSub.cancel().catchError((e) {
-          debugPrint("[PointAutomation] Cancel error (ignored): $e");
-        }));
-      }
-
-      _startLocationStream(userId);
-
-      if (kDebugMode) {
-        debugPrint("[PointAutomation] Location stream restarted");
-      }
-    } catch (e, s) {
-      debugPrint("[PointAutomation] ERROR in _restartLocationStream: $e\n$s");
-    }
-  }
-
-  // ── Lifecycle ──────────────────────────────────────────────────────────
-
-  Future<void> stopTracking() async {
-
-    if (!_isTracking) {
-      return;
-    }
-
-    if (kDebugMode) {
-      debugPrint("[PointAutomation] Stopping automatic tracking...");
-    }
-
-
-    _isTracking = false;
-    _currentUserId = null;
-    _currentSettings = null;
-    _lastPointTime = null;
-    _lastKnownBatchCount = 0;
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
-    _expirationTimer?.cancel();
-    _expirationTimer = null;
-    await _batchCountSub?.cancel();
-    _batchCountSub = null;
-    await _settingsWatchSub?.cancel();
-    _settingsWatchSub = null;
-    await _locationStreamSub?.cancel();
-    _locationStreamSub = null;
-  }
-
-  Future<void> restartTracking() async {
-
-    if (!_isTracking || _currentUserId == null) {
-      return;
-    }
-
-    final userId = _currentUserId!;
-
-    if (kDebugMode) {
-      debugPrint("[PointAutomation] Restarting tracking to apply new settings...");
-    }
-
-    await stopTracking();
-    await startTracking(userId);
-  }
-
-  // ── Location update handler (store only) ───────────────────────────────
-
-  /// Handles location updates from the stream.
-  /// Only stores the point locally. The reactive [_batchCountSub] stream
-  /// picks up the count change and triggers the upload when the threshold
-  /// is met.
-  Future<void> _handleLocationUpdate(Result<dynamic, String> result, int userId) async {
-    if (_writeBusy) {
-      if (kDebugMode) {
-        debugPrint("[PointAutomation] Skipping location update, write busy.");
-      }
-      return;
-    }
-
-    _writeBusy = true;
-
-    try {
-      if (result case Ok(value: final point)) {
-        if (kDebugMode) {
-          debugPrint("[PointAutomation] Storing point from location stream");
-        }
-
-        final storeResult = await _storePoint(point);
-
-        if (storeResult case Ok()) {
-          _lastPointTime = DateTime.now();
-        } else if (storeResult case Err(value: final err)) {
-          debugPrint("[PointAutomation] Failed to store point: $err");
-        }
-      } else if (result case Err(value: final err)) {
-        debugPrint("[PointAutomation] Point creation error: $err");
-      }
-    } catch (e, s) {
-      debugPrint("[PointAutomation] Error handling location update: $e\n$s");
-    } finally {
-      _writeBusy = false;
-    }
+  bool _settingsRequireEngineUpdate(
+      TrackerSettings old,
+      TrackerSettings current,
+      ) {
+    return old.locationPrecision != current.locationPrecision ||
+        old.minimumPointDistance != current.minimumPointDistance;
   }
 }
