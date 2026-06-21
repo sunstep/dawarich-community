@@ -295,26 +295,41 @@ final class PointAutomationService {
 
     if (kDebugMode) {
       debugPrint(
-          '[PointAutomation] Starting settings watch for userId: $userId');
+        '[PointAutomation] Starting settings watch for userId: $userId',
+      );
     }
 
     _settingsWatchSub = _watchTrackerSettings(userId).listen(
-      (settings) async {
-        final old = _currentSettings;
+          (settings) async {
+        final TrackerSettings? old = _currentSettings;
         _currentSettings = settings;
 
-        if (old != null && _settingsRequireEngineUpdate(old, settings)) {
+        if (old == null) {
+          return;
+        }
+
+        if (_settingsRequireEngineRestart(old, settings)) {
           if (kDebugMode) {
             debugPrint(
-                '[PointAutomation] Settings changed, updating tracker engine...');
+              '[PointAutomation] Scheduler settings changed, restarting tracker engine...',
+            );
+          }
+
+          await _trackerEngine.stopTracking();
+          await _trackerEngine.configure(settings);
+          await _trackerEngine.startTracking(settings);
+
+          return;
+        }
+
+        if (_settingsRequireEngineUpdate(old, settings)) {
+          if (kDebugMode) {
+            debugPrint(
+              '[PointAutomation] Runtime settings changed, updating tracker engine...',
+            );
           }
 
           await _trackerEngine.updateConfiguration(settings);
-
-          if (old.trackingMode != settings.trackingMode) {
-            await _trackerEngine.stopTracking();
-            await _trackerEngine.startTracking(settings);
-          }
         }
       },
       onError: (error) {
@@ -323,12 +338,19 @@ final class PointAutomationService {
     );
   }
 
-  // trackingMode is derived from trackingFrequency for now,
-  // so comparing trackingFrequency also covers mode changes.
-  bool _settingsRequireEngineUpdate(
-      TrackerSettings old, TrackerSettings current) {
+  bool _settingsRequireEngineRestart(
+      TrackerSettings old,
+      TrackerSettings current,
+      ) {
     return old.trackingFrequency != current.trackingFrequency ||
-        old.locationPrecision != current.locationPrecision ||
+        old.trackingMode != current.trackingMode;
+  }
+
+  bool _settingsRequireEngineUpdate(
+      TrackerSettings old,
+      TrackerSettings current,
+      ) {
+    return old.locationPrecision != current.locationPrecision ||
         old.minimumPointDistance != current.minimumPointDistance;
   }
 }
