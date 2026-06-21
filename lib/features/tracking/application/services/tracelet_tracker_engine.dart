@@ -14,6 +14,7 @@ import 'package:tracelet/tracelet.dart' as tl;
 final class TraceletTrackerEngine implements ITrackerEngine {
 
   late final int _instanceId = identityHashCode(this);
+  late String debugPrefix = "[TraceletTrackerEngine#$_instanceId]";
 
   static const int _streamLocationUpdateIntervalMs = 5000;
   static const int _fastestStreamLocationUpdateIntervalMs = 2500;
@@ -36,7 +37,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
     if (_isLocationListenerRegistered) {
       if (kDebugMode) {
         debugPrint(
-          '[TrackerEngine#$_instanceId] Listener already registered.',
+          '$debugPrefix Listener already registered.',
         );
       }
 
@@ -47,7 +48,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
     if (kDebugMode) {
       debugPrint(
-        '[TrackerEngine#$_instanceId] Registering Tracelet.onLocation listener.',
+        '$debugPrefix Registering Tracelet.onLocation listener.',
       );
     }
 
@@ -56,7 +57,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
       if (_lastLocationUuid == location.uuid) {
         if (kDebugMode) {
           debugPrint(
-            '[TrackerEngine#$_instanceId] Duplicate Tracelet location ignored: ${location.uuid}',
+            '$debugPrefix Duplicate Tracelet location ignored: ${location.uuid}',
           );
         }
 
@@ -67,7 +68,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
       if (kDebugMode) {
         debugPrint(
-          '[TrackerEngine#$_instanceId] Location fix received: '
+          '$debugPrefix Location fix received: '
               '${locationFix.latitude}, ${locationFix.longitude} '
               'at ${locationFix.timestampUtc.toIso8601String()}',
         );
@@ -110,7 +111,16 @@ final class TraceletTrackerEngine implements ITrackerEngine {
     }
 
     if (settings.trackingMode == TrackingMode.timer) {
+
+      if (kDebugMode) {
+        debugPrint('$debugPrefix Starting Tracelet periodic mode...');
+      }
+
       return await tl.Tracelet.startPeriodic();
+    }
+
+    if (kDebugMode) {
+      debugPrint('$debugPrefix Starting Tracelet automatic mode...');
     }
 
     return await tl.Tracelet.start();
@@ -142,7 +152,10 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
     final tl.GeoConfig geoConfig = tl.GeoConfig(
       desiredAccuracy: _mapDesiredAccuracy(settings.locationPrecision),
-      distanceFilter: settings.minimumPointDistance.toDouble(),
+      distanceFilter:
+        settings.minimumPointDistance > 0 ?
+        settings.minimumPointDistance.toDouble() :
+        20.0,
       stationaryRadius: 25.0,
       locationTimeout: 60,
       disableElasticity: false,
@@ -151,13 +164,13 @@ final class TraceletTrackerEngine implements ITrackerEngine {
       maxMonitoredGeofences: -1,
       enableTimestampMeta: false,
       enableAdaptiveMode: isAutoMode,
-      periodicLocationInterval: settings.trackingFrequency,
+      periodicLocationInterval: _resolvePeriodicLocationInterval(settings),
       periodicDesiredAccuracy: _mapDesiredAccuracy(settings.locationPrecision),
       enableSparseUpdates: false,
       sparseDistanceThreshold: 50.0,
       sparseMaxIdleSeconds: 300,
       batteryBudgetPerHour: 2.0,
-      enableDeadReckoning: isAutoMode,
+      enableDeadReckoning: false,
       deadReckoningActivationDelay: 0,
       deadReckoningMaxDuration: 0,
       filter: const tl.LocationFilter(),
@@ -248,6 +261,16 @@ final class TraceletTrackerEngine implements ITrackerEngine {
       classifier: classifierConfig,
       impact: impactConfig,
     );
+  }
+
+  // A small helper to ensure 0 doesn't get passed
+  int _resolvePeriodicLocationInterval(TrackerSettings settings) {
+
+    if (settings.trackingMode == TrackingMode.timer) {
+      return settings.trackingFrequency;
+    }
+
+    return 60;
   }
 
   tl.DesiredAccuracy _mapDesiredAccuracy(
