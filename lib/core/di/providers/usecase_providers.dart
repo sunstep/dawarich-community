@@ -234,13 +234,11 @@ final pointValidatorProvider = FutureProvider<PointValidator>((ref) async {
 
 final createPointFromPositionUseCaseProvider = FutureProvider<CreatePointUseCase>((ref) async {
   final validator = await ref.watch(pointValidatorProvider.future);
-  final apiRepo = await ref.watch(apiPointRepositoryProvider.future);
   return CreatePointUseCase(
     ref.watch(hardwareRepositoryProvider),
     await ref.watch(pointLocalRepositoryProvider.future),
     await ref.watch(trackRepositoryProvider.future),
     validator,
-    apiRepo,
   );
 });
 
@@ -251,12 +249,12 @@ final createPointFromGpsWorkflowProvider = FutureProvider<CreatePointFromGpsWork
   return CreatePointFromGpsWorkflow(prefs, locationProvider, createFromPos);
 });
 
-final traceletTrackerEngineProvider = FutureProvider<TraceletTrackerEngine>((ref) async {
+final traceletTrackerEngineProvider = Provider<TraceletTrackerEngine>((ref) {
   return TraceletTrackerEngine();
 });
 
 final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((ref) async {
-  final TraceletTrackerEngine engine = await ref.watch(traceletTrackerEngineProvider.future);
+  final TraceletTrackerEngine engine = ref.watch(traceletTrackerEngineProvider);
   final CreatePointUseCase createPoint = await ref.watch(createPointFromPositionUseCaseProvider.future);
   final storePoint = await ref.watch(storePointUseCaseProvider.future);
   final batchCount = await ref.watch(getBatchPointCountUseCaseProvider.future);
