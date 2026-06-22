@@ -56,6 +56,7 @@ final class PointAutomationService {
   );
 
   Future<void> startTracking(int userId) async {
+
     if (_isTracking) {
       return;
     }
