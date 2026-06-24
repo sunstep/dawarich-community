@@ -106,10 +106,6 @@ final class TraceletTrackerEngine implements ITrackerEngine {
   @override
   Future<tl.State> startTracking(TrackerSettings settings) async {
 
-    if (!settings.automaticTracking) {
-      throw StateError('Automatic tracking is disabled.');
-    }
-
     if (settings.trackingMode == TrackingMode.timer) {
 
       if (kDebugMode) {
