@@ -125,6 +125,20 @@ android {
     buildFeatures {
         buildConfig true
     }
+
+    sourceSets {
+        gmsRelease {
+            jniLibs.srcDirs += [
+                    file("../../build/app/intermediates/flutter/gmsRelease/jniLibs")
+            ]
+        }
+
+        fossRelease {
+            jniLibs.srcDirs += [
+                    file("../../build/app/intermediates/flutter/fossRelease/jniLibs")
+            ]
+        }
+    }
 }
 
 // Exclude Google Play Services from FOSS builds only
@@ -147,4 +161,18 @@ rootProject.subprojects { subproject ->
 
 flutter {
     source = "../.."
+}
+
+afterEvaluate {
+    [
+            "GmsRelease" : "gmsRelease",
+            "FossRelease": "fossRelease"
+    ].each { taskSuffix, flutterVariant ->
+        def flutterTask = tasks.findByName("compileFlutterBuild${taskSuffix}")
+        def mergeTask = tasks.findByName("merge${taskSuffix}NativeLibs")
+
+        if (flutterTask != null && mergeTask != null) {
+            mergeTask.dependsOn(flutterTask)
+        }
+    }
 }

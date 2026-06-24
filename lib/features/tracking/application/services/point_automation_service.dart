@@ -8,6 +8,7 @@ import 'package:dawarich/features/tracking/application/usecases/notifications/sh
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/store_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/get_tracker_settings_usecase.dart';
+import 'package:dawarich/features/tracking/application/usecases/settings/save_tracker_settings_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/watch_tracker_settings_usecase.dart';
 import 'package:dawarich/features/tracking/domain/models/location_fix.dart';
 import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
@@ -25,6 +26,7 @@ final class PointAutomationService {
   final GetCurrentBatchUseCase _getCurrentBatch;
   final BatchUploadWorkflowUseCase _batchUploadWorkflow;
   final GetTrackerSettingsUseCase _getTrackerSettings;
+  final SaveTrackerSettingsUseCase _saveTrackerSettings;
   final WatchTrackerSettingsUseCase _watchTrackerSettings;
   final IPointLocalRepository _localPointRepository;
 
@@ -51,81 +53,174 @@ final class PointAutomationService {
     this._getCurrentBatch,
     this._batchUploadWorkflow,
     this._getTrackerSettings,
+    this._saveTrackerSettings,
     this._watchTrackerSettings,
     this._localPointRepository,
   );
 
-  Future<void> startTracking(int userId) async {
-
+  Future<Result<(), String>> startTracking(int userId) async {
     if (_isTracking) {
-      return;
+      return const Ok(());
     }
 
     if (kDebugMode) {
       debugPrint('[PointAutomation] Starting automatic tracking...');
     }
 
-    final TrackerSettings settings = await _getTrackerSettings(userId);
+    try {
+      final TrackerSettings settings = await _getTrackerSettings(userId);
+      final TrackerSettings updatedSettings = settings.copyWith(
+        automaticTracking: true,
+      );
 
-    await _trackerEngine.configure(settings);
+      await _trackerEngine.configure(updatedSettings);
 
-    _currentUserId = userId;
-    _currentSettings = settings;
-    _lastPointTime = null;
-    _lastKnownBatchCount = 0;
+      _currentUserId = userId;
+      _currentSettings = updatedSettings;
+      _lastPointTime = null;
+      _lastKnownBatchCount = 0;
 
-    _startLocationFixWatch(userId);
+      _startLocationFixWatch(userId);
 
-    await _trackerEngine.startTracking(settings);
+      await _trackerEngine.startTracking(updatedSettings);
 
-    _isTracking = true;
+      await _persistAutomaticTracking(userId, true);
 
-    await _refreshNotification(userId);
+      _isTracking = true;
 
-    _startSettingsWatch(userId);
-    _startBatchCountWatch(userId);
+      unawaited(_refreshNotification(userId));
+
+      _startSettingsWatch(userId);
+      _startBatchCountWatch(userId);
+
+      return const Ok(());
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[PointAutomationService] Failed to start tracking: $e');
+        debugPrint('$st');
+      }
+
+      await _cleanupAfterFailedStart();
+
+      try {
+        await _persistAutomaticTracking(userId, false);
+      } catch (rollbackError, rollbackStackTrace) {
+        if (kDebugMode) {
+          debugPrint(
+            '[PointAutomationService] Failed to rollback tracking setting: '
+                '$rollbackError',
+          );
+          debugPrint('$rollbackStackTrace');
+        }
+      }
+
+      return Err('Failed to start tracking: $e');
+    }
   }
 
-  Future<void> stopTracking() async {
-    if (!_isTracking) {
-      return;
-    }
-
+  Future<Result<(), String>> stopTracking(int userId) async {
     if (kDebugMode) {
       debugPrint('[PointAutomation] Stopping automatic tracking...');
     }
 
-    await _trackerEngine.stopTracking();
+    Object? stopError;
+    StackTrace? stopStackTrace;
+
+    try {
+
+      await _persistAutomaticTracking(userId, false);
+
+      try {
+        await _trackerEngine.stopTracking().timeout(
+          const Duration(seconds: 10),
+        );
+      } catch (e, st) {
+        stopError = e;
+        stopStackTrace = st;
+
+        if (kDebugMode) {
+          debugPrint('[PointAutomation] Engine stop failed: $e');
+          debugPrint('$st');
+        }
+      }
+
+      await _locationFixSub?.cancel();
+      await _settingsWatchSub?.cancel();
+      await _batchCountSub?.cancel();
+
+      _locationFixSub = null;
+      _settingsWatchSub = null;
+      _batchCountSub = null;
+
+      _isTracking = false;
+      _currentUserId = null;
+      _currentSettings = null;
+      _lastPointTime = null;
+      _lastKnownBatchCount = 0;
+
+      if (stopError != null) {
+        return Err(
+          'Tracking was disabled in settings, but stopping the engine failed: '
+              '$stopError',
+        );
+      }
+
+      return const Ok(());
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[PointAutomation] Failed to disable tracking: $e');
+        debugPrint('$st');
+
+        if (stopStackTrace != null) {
+          debugPrint('$stopStackTrace');
+        }
+      }
+
+      return Err('Failed to disable tracking: $e');
+    }
+  }
+
+  Future<Result<(), String>> restartTracking() async {
+    final int? userId = _currentUserId;
+
+    if (!_isTracking || userId == null) {
+      return const Ok(());
+    }
+
+    if (kDebugMode) {
+      debugPrint('[PointAutomation] Restarting tracking...');
+    }
+
+    final Result<(), String> stopResult = await stopTracking(userId);
+
+    if (stopResult case Err(value: final message)) {
+      return Err(message);
+    }
+
+    return await startTracking(userId);
+  }
+
+  Future<void> _cleanupAfterFailedStart() async {
+    await _locationFixSub?.cancel();
+    await _settingsWatchSub?.cancel();
+    await _batchCountSub?.cancel();
+
+    _locationFixSub = null;
+    _settingsWatchSub = null;
+    _batchCountSub = null;
 
     _isTracking = false;
     _currentUserId = null;
     _currentSettings = null;
     _lastPointTime = null;
     _lastKnownBatchCount = 0;
-
-    await _locationFixSub?.cancel();
-    _locationFixSub = null;
-
-    await _settingsWatchSub?.cancel();
-    _settingsWatchSub = null;
-
-    await _batchCountSub?.cancel();
-    _batchCountSub = null;
   }
 
-  Future<void> restartTracking() async {
-    if (!_isTracking || _currentUserId == null) {
-      return;
-    }
+  Future<void> _persistAutomaticTracking(int userId, bool value) async {
 
-    final int userId = _currentUserId!;
-
-    if (kDebugMode) {
-      debugPrint('[PointAutomation] Restarting tracking...');
-    }
-
-    await stopTracking();
-    await startTracking(userId);
+    final settings = await _getTrackerSettings(userId);
+    final updatedSettings = settings.copyWith(automaticTracking: value);
+    await _saveTrackerSettings(updatedSettings);
   }
 
   void _startLocationFixWatch(int userId) {
