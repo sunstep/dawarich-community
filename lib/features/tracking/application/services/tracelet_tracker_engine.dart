@@ -19,62 +19,67 @@ final class TraceletTrackerEngine implements ITrackerEngine {
   static const int _streamLocationUpdateIntervalMs = 5000;
   static const int _fastestStreamLocationUpdateIntervalMs = 2500;
 
-  static final StreamController<LocationFix> _locationFixController =
-  StreamController<LocationFix>.broadcast();
-
-  static bool _isLocationListenerRegistered = false;
+  static bool _isTraceletLocationCallbackRegistered = false;
   static String? _lastLocationUuid;
+  static LocationFixHandler? _locationFixHandler;
+  static HeartbeatHandler? _heartbeatHandler;
 
-
-  @override
-  Stream<LocationFix> watchLocations() {
-    _registerLocationListenerOnce();
-    return _locationFixController.stream;
-  }
-
-  void _registerLocationListenerOnce() {
-
-    if (_isLocationListenerRegistered) {
-      if (kDebugMode) {
-        debugPrint(
-          '$debugPrefix Listener already registered.',
-        );
-      }
-
+  void _registerTraceletLocationCallbackOnce() {
+    if (_isTraceletLocationCallbackRegistered) {
       return;
     }
 
-    _isLocationListenerRegistered = true;
-
-    if (kDebugMode) {
-      debugPrint(
-        '$debugPrefix Registering Tracelet.onLocation listener.',
-      );
-    }
+    _isTraceletLocationCallbackRegistered = true;
 
     tl.Tracelet.onLocation((tl.Location location) {
+      if (kDebugMode) {
+        debugPrint(
+          '[TraceletTrackerEngine] Tracelet.onLocation fired: '
+              'uuid=${location.uuid}, '
+              'lat=${location.coords.latitude}, '
+              'lon=${location.coords.longitude}, '
+              'accuracy=${location.coords.accuracy}, '
+              'speed=${location.coords.speed}, '
+              'source=${location.locationSource}, '
+              'timestamp=${location.timestamp}',
+        );
+      }
 
       if (_lastLocationUuid == location.uuid) {
         if (kDebugMode) {
           debugPrint(
-            '$debugPrefix Duplicate Tracelet location ignored: ${location.uuid}',
+            '[TraceletTrackerEngine] Duplicate Tracelet location ignored: '
+                '${location.uuid}',
           );
         }
 
         return;
       }
-      _lastLocationUuid = location.uuid;
-      final locationFix = _mapLocationFix(location);
 
-      if (kDebugMode) {
-        debugPrint(
-          '$debugPrefix Location fix received: '
-              '${locationFix.latitude}, ${locationFix.longitude} '
-              'at ${locationFix.timestampUtc.toIso8601String()}',
-        );
+      _lastLocationUuid = location.uuid;
+
+      final LocationFix locationFix = _mapLocationFix(location);
+      final LocationFixHandler? handler = _locationFixHandler;
+
+      if (handler == null) {
+        if (kDebugMode) {
+          debugPrint(
+            '[TraceletTrackerEngine] Dropping Tracelet location because '
+                'no app handler is registered.',
+          );
+        }
+
+        return;
       }
 
-      _locationFixController.add(locationFix);
+      unawaited(
+        handler(locationFix).catchError((Object error, StackTrace stackTrace) {
+          if (kDebugMode) {
+            debugPrint('[TraceletTrackerEngine] Location handler failed: $error');
+            debugPrint('$stackTrace');
+          }
+        }),
+      );
     });
   }
 
@@ -100,6 +105,31 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
   DateTime _parseTimestampUtc(String timestamp) {
     return DateTime.tryParse(timestamp)?.toUtc() ?? DateTime.now().toUtc();
+  }
+
+  @override
+  void setLocationFixHandler(LocationFixHandler? handler) {
+    _locationFixHandler = handler;
+
+    if (kDebugMode) {
+      debugPrint(
+        '[TraceletTrackerEngine] Location stream handler '
+            '${handler == null ? 'cleared' : 'registered'}.',
+      );
+    }
+  }
+
+  @override
+  void setHeartbeatHandler(HeartbeatHandler? handler) {
+
+    _heartbeatHandler = handler;
+
+    if (kDebugMode) {
+      debugPrint(
+        '[TraceletTrackerEngine] Heartbeat handler '
+            '${handler == null ? 'cleared' : 'registered'}.',
+      );
+    }
   }
 
   // Todo: take ownership of the state model
@@ -132,6 +162,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
   Future<tl.State> configure(TrackerSettings settings) async {
 
     final tl.Config config = _buildConfiguration(settings);
+    _registerTraceletLocationCallbackOnce();
     return await tl.Tracelet.ready(config);
   }
 

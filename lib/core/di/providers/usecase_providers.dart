@@ -261,11 +261,9 @@ final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((r
   final showNotif = ref.watch(showTrackerNotificationUseCaseProvider);
   final getSettings = await ref.watch(getTrackerSettingsUseCaseProvider.future);
   final saveSettings = await ref.watch(saveTrackerSettingsUseCaseProvider.future);
-  final watchSettings = await ref.watch(watchTrackerSettingsUseCaseProvider.future);
 
   final getCurrentBatch = await ref.watch(getCurrentBatchUseCaseProvider.future);
   final batchUploadWorkflow = await ref.watch(batchUploadWorkflowUseCaseProvider.future);
-  final localRepo = await ref.watch(pointLocalRepositoryProvider.future);
 
   return PointAutomationService(
     engine,
@@ -277,8 +275,6 @@ final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((r
     batchUploadWorkflow,
     getSettings,
     saveSettings,
-    watchSettings,
-    localRepo,
   );
 });
 
