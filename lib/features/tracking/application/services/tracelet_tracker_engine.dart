@@ -20,6 +20,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
   static const int _fastestStreamLocationUpdateIntervalMs = 2500;
 
   static bool _isTraceletLocationCallbackRegistered = false;
+  static bool _isTraceletHeartbeatCallbackRegistered = false;
   static String? _lastLocationUuid;
   static LocationFixHandler? _locationFixHandler;
   static HeartbeatHandler? _heartbeatHandler;
@@ -76,6 +77,45 @@ final class TraceletTrackerEngine implements ITrackerEngine {
         handler(locationFix).catchError((Object error, StackTrace stackTrace) {
           if (kDebugMode) {
             debugPrint('[TraceletTrackerEngine] Location handler failed: $error');
+            debugPrint('$stackTrace');
+          }
+        }),
+      );
+    });
+  }
+
+  void _registerTraceletHeartbeatOnce() {
+
+    if (_isTraceletHeartbeatCallbackRegistered) {
+      return;
+    }
+
+    _isTraceletHeartbeatCallbackRegistered = true;
+
+    tl.Tracelet.onHeartbeat((tl.HeartbeatEvent heartbeat) {
+      if (kDebugMode) {
+        debugPrint(
+          '[TraceletTrackerEngine] Tracelet.onHeartbeat fired: '
+        );
+      }
+
+      final HeartbeatHandler? handler = _heartbeatHandler;
+
+      if (handler == null) {
+        if (kDebugMode) {
+          debugPrint(
+            '[TraceletTrackerEngine] Dropping Tracelet heartbeat because '
+                'no handler is registered.',
+          );
+        }
+
+        return;
+      }
+
+      unawaited(
+        handler().catchError((Object error, StackTrace stackTrace) {
+          if (kDebugMode) {
+            debugPrint('[TraceletTrackerEngine] Heartbeat handler failed: $error');
             debugPrint('$stackTrace');
           }
         }),
@@ -163,6 +203,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
     final tl.Config config = _buildConfiguration(settings);
     _registerTraceletLocationCallbackOnce();
+    _registerTraceletHeartbeatOnce();
     return await tl.Tracelet.ready(config);
   }
 
@@ -208,7 +249,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
     final tl.AppConfig appConfig = tl.AppConfig(
       stopOnTerminate: false,
       startOnBoot: true,
-      heartbeatInterval: 60,
+      heartbeatInterval: 30,
       schedule: const <String>[],
     );
 

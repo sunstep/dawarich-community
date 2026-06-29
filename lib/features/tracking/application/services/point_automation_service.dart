@@ -3,6 +3,7 @@ import 'package:dawarich/features/batch/application/usecases/batch_upload_workfl
 import 'package:dawarich/features/batch/application/usecases/get_current_batch_usecase.dart';
 import 'package:dawarich/features/tracking/application/interfaces/tracker_engine_interface.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_batch_point_count_usecase.dart';
+import 'package:dawarich/features/tracking/application/usecases/get_last_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/notifications/show_tracker_notification_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/store_point_usecase.dart';
@@ -18,6 +19,7 @@ final class PointAutomationService {
   final ITrackerEngine _trackerEngine;
   final CreatePointUseCase _createPoint;
   final StorePointUseCase _storePoint;
+  final GetLastPointUseCase _getLastPoint;
   final GetBatchPointCountUseCase _getBatchPointCount;
   final ShowTrackerNotificationUseCase _showTrackerNotification;
   final GetCurrentBatchUseCase _getCurrentBatch;
@@ -25,19 +27,20 @@ final class PointAutomationService {
   final GetTrackerSettingsUseCase _getTrackerSettings;
   final SaveTrackerSettingsUseCase _saveTrackerSettings;
 
-  Future<void> _locationProcessingChain = Future.value();
+  Future<void> _trackingProcessingChain = Future.value();
 
   PointAutomationService(
-    this._trackerEngine,
-    this._createPoint,
-    this._storePoint,
-    this._getBatchPointCount,
-    this._showTrackerNotification,
-    this._getCurrentBatch,
-    this._batchUploadWorkflow,
-    this._getTrackerSettings,
-    this._saveTrackerSettings,
-  );
+      this._trackerEngine,
+      this._createPoint,
+      this._storePoint,
+      this._getLastPoint,
+      this._getBatchPointCount,
+      this._showTrackerNotification,
+      this._getCurrentBatch,
+      this._batchUploadWorkflow,
+      this._getTrackerSettings,
+      this._saveTrackerSettings,
+      );
 
   Future<Result<(), String>> startTracking(int userId) async {
 
@@ -53,7 +56,7 @@ final class PointAutomationService {
 
       await _trackerEngine.configure(updatedSettings);
 
-      _attachLocationFixHandler(userId);
+      _attachTrackingHandlers(userId);
       await _trackerEngine.startTracking(updatedSettings);
 
       await _persistAutomaticTracking(userId, true);
@@ -96,7 +99,7 @@ final class PointAutomationService {
     StackTrace? persistStackTrace;
     StackTrace? stopStackTrace;
 
-    _detachLocationFixHandler();
+    _detachTrackingHandlers();
 
     try {
       await _persistAutomaticTracking(userId, false);
@@ -155,7 +158,7 @@ final class PointAutomationService {
   }
 
   Future<void> _cleanupAfterFailedStart() async {
-    _detachLocationFixHandler();
+    _detachTrackingHandlers();
 
     try {
       await _trackerEngine.stopTracking().timeout(
@@ -176,9 +179,9 @@ final class PointAutomationService {
     await _saveTrackerSettings(updatedSettings);
   }
 
-  void _attachLocationFixHandler(int userId) {
+  void _attachTrackingHandlers(int userId) {
     if (kDebugMode) {
-      debugPrint('[PointAutomation] Attaching Tracelet location fix handler.');
+      debugPrint('[PointAutomation] Attaching Tracelet tracking handlers.');
     }
 
     _trackerEngine.setLocationFixHandler(
@@ -189,35 +192,53 @@ final class PointAutomationService {
         );
       },
     );
+
+    _trackerEngine.setHeartbeatHandler(
+          () async {
+        await _enqueueTrackingTask(
+              () async {
+            await _handleHeartbeat(userId);
+          },
+        );
+      },
+    );
   }
 
-  void _detachLocationFixHandler() {
+
+  void _detachTrackingHandlers() {
     if (kDebugMode) {
-      debugPrint('[PointAutomation] Detaching Tracelet location fix handler.');
+      debugPrint('[PointAutomation] Detaching Tracelet tracking handlers.');
     }
 
     _trackerEngine.setLocationFixHandler(null);
+    _trackerEngine.setHeartbeatHandler(null);
   }
 
   Future<void> _enqueueLocationFix({
     required LocationFix locationFix,
     required int userId,
   }) {
-    _locationProcessingChain = _locationProcessingChain
-        .then((_) async {
-      await _handleLocationFix(
-        locationFix: locationFix,
-        userId: userId,
-      );
-    })
+    return _enqueueTrackingTask(
+          () async {
+        await _handleLocationFix(
+          locationFix: locationFix,
+          userId: userId,
+        );
+      },
+    );
+  }
+
+  Future<void> _enqueueTrackingTask(Future<void> Function() task) {
+    _trackingProcessingChain = _trackingProcessingChain
+        .then((_) => task())
         .catchError((Object error, StackTrace stackTrace) {
       if (kDebugMode) {
-        debugPrint('[PointAutomation] Location processing failed: $error');
+        debugPrint('[PointAutomation] Tracking processing failed: $error');
         debugPrint('$stackTrace');
       }
     });
 
-    return _locationProcessingChain;
+    return _trackingProcessingChain;
   }
 
   Future<void> _handleLocationFix({
@@ -243,8 +264,7 @@ final class PointAutomationService {
             await _uploadCurrentBatch(userId);
           }
 
-          _refreshNotificationWithCount(batchCount: batchCount,
-              lastPointTimeUtc: locationFix.timestampUtc);
+          await _refreshNotification(userId);
         } else if (storeResult case Err(value: final message)) {
           debugPrint('[PointAutomation] Failed to store point: $message');
         }
@@ -254,49 +274,46 @@ final class PointAutomationService {
     } catch (error, stackTrace) {
       debugPrint(
         '[PointAutomation] Error handling location fix: '
-        '$error\n$stackTrace',
+            '$error\n$stackTrace',
       );
     }
   }
 
-  // ── Notification ───────────────────────────────────────────────────────
-  Future<void> _refreshNotification(int userId) async {
-    try {
-      final batchCount = await _getBatchPointCount(userId);
-
-      _refreshNotificationWithCount(batchCount: batchCount);
-    } catch (e, s) {
-      debugPrint("[PointAutomation] Notification refresh error: $e\n$s");
+  Future<void> _handleHeartbeat(int userId) async {
+    if (kDebugMode) {
+      debugPrint('[PointAutomation] Tracelet heartbeat received.');
     }
+    
+    await _refreshNotification(userId);
   }
 
-  /// Updates the notification using an already-known batch count,
-  /// avoiding an extra DB query.
-  void _refreshNotificationWithCount({
-    required int batchCount,
-    DateTime? lastPointTimeUtc,
-  }) {
+  Future<void> _refreshNotification(int userId) async {
     try {
-      String body;
+      final int batchCount = await _getBatchPointCount(userId);
+      final lastPointOption = await _getLastPoint(userId);
 
-      if (lastPointTimeUtc != null) {
-        final lastTime = lastPointTimeUtc.toLocal();
-        final lastTimeStr = '${lastTime.hour.toString().padLeft(2, '0')}:'
-            '${lastTime.minute.toString().padLeft(2, '0')}:'
-            '${lastTime.second.toString().padLeft(2, '0')}';
-
-        body = 'Last point: $lastTimeStr • $batchCount in batch';
-      } else {
-        body = 'Tracker started, no points tracked yet • $batchCount in batch';
-      }
+      final String lastPointTimeStr = switch (lastPointOption) {
+        Some(value: final lastPoint) => _formatLastPointTime(
+          lastPoint.timestamp,
+        ),
+        None() => '--:--:--',
+      };
 
       _showTrackerNotification(
         title: 'Tracking active',
-        body: body,
+        body: 'Last point: $lastPointTimeStr • $batchCount in batch',
       );
     } catch (e, s) {
       debugPrint('[PointAutomation] Notification refresh error: $e\n$s');
     }
+  }
+
+  String _formatLastPointTime(DateTime timestampUtc) {
+    final DateTime local = timestampUtc.toLocal();
+
+    return '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}:'
+        '${local.second.toString().padLeft(2, '0')}';
   }
 
   // ── Upload helper ──────────────────────────────────────────────────────
