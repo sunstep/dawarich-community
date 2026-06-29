@@ -257,6 +257,7 @@ final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((r
   final TraceletTrackerEngine engine = ref.watch(traceletTrackerEngineProvider);
   final CreatePointUseCase createPoint = await ref.watch(createPointFromPositionUseCaseProvider.future);
   final storePoint = await ref.watch(storePointUseCaseProvider.future);
+  final getLastPoint = await ref.watch(getLastPointUseCaseProvider.future);
   final batchCount = await ref.watch(getBatchPointCountUseCaseProvider.future);
   final showNotif = ref.watch(showTrackerNotificationUseCaseProvider);
   final getSettings = await ref.watch(getTrackerSettingsUseCaseProvider.future);
@@ -269,6 +270,7 @@ final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((r
     engine,
     createPoint,
     storePoint,
+    getLastPoint,
     batchCount,
     showNotif,
     getCurrentBatch,
