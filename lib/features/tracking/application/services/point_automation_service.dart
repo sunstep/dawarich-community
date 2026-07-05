@@ -172,6 +172,26 @@ final class PointAutomationService {
     }
   }
 
+  Future<void> handleTraceletLocationFix({
+    required int userId,
+    required LocationFix locationFix,
+  }) async {
+    await _enqueueLocationFix(
+      locationFix: locationFix,
+      userId: userId,
+    );
+  }
+
+  Future<void> handleTraceletHeartbeat({
+    required int userId,
+  }) async {
+    await _enqueueTrackingTask(
+          () async {
+        await _handleHeartbeat(userId);
+      },
+    );
+  }
+
   Future<void> _persistAutomaticTracking(int userId, bool value) async {
 
     final settings = await _getTrackerSettings(userId);
@@ -186,19 +206,17 @@ final class PointAutomationService {
 
     _trackerEngine.setLocationFixHandler(
           (LocationFix locationFix) async {
-        await _enqueueLocationFix(
-          locationFix: locationFix,
+        await handleTraceletLocationFix(
           userId: userId,
+          locationFix: locationFix,
         );
       },
     );
 
     _trackerEngine.setHeartbeatHandler(
           () async {
-        await _enqueueTrackingTask(
-              () async {
-            await _handleHeartbeat(userId);
-          },
+        await handleTraceletHeartbeat(
+          userId: userId,
         );
       },
     );

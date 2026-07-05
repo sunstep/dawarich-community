@@ -1,35 +1,48 @@
-//
-// import 'dart:async';
-//
-// import 'package:flutter/foundation.dart';
-// import 'package:flutter/material.dart';
-// import 'package:flutter_background_service/flutter_background_service.dart';
-//
-// import 'background_tracking_service.dart';
-//
-//
-// @pragma('vm:entry-point')
-// void backgroundTrackingEntry(ServiceInstance backgroundService) {
-//
-//   if (kDebugMode) {
-//     debugPrint('[Background] Entry point reached');
-//   }
-//
-//   WidgetsFlutterBinding.ensureInitialized();
-//
-//
-//   BackgroundTrackingEntry.registerListeners(backgroundService);
-//   if (kDebugMode) {
-//     debugPrint('[Background] Listeners registered (stopService, restartTracking)');
-//   }
-//   backgroundService.invoke('ready');
-//
-//   unawaited(() async {
-//     try {
-//       await BackgroundTrackingEntry.checkBackgroundTracking(backgroundService);
-//     } catch (e, s) {
-//       debugPrint('[Background] Fatal in checkBackgroundTracking: $e\n$s');
-//       await BackgroundTrackingEntry.shutdown(backgroundService, 'fatal error');
-//     }
-//   }());
-// }
+
+import 'package:dawarich/core/di/background_provider_container.dart';
+import 'package:dawarich/core/di/providers/app_providers.dart';
+import 'package:dawarich/features/tracking/application/converters/map_tracelet_location_to_location_fix.dart';
+import 'package:dawarich/features/tracking/application/services/point_automation_service.dart';
+import 'package:dawarich/features/tracking/domain/models/location_fix.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tracelet/tracelet.dart' as tl;
+
+@pragma('vm:entry-point')
+Future<void> dawarichTraceletHeadlessTask(tl.HeadlessEvent event) async {
+
+  final ProviderContainer container =
+  await BackgroundProviderContainer.ensureInitialized();
+
+  final userId = container.read(currentUserIdProvider);
+
+  final PointAutomationService pointAutomationService =
+  await container.read(pointAutomationServiceProvider.future);
+
+  if (event case tl.Location location) {
+    final LocationFix locationFix = mapTraceletLocationToLocationFix(location);
+
+    await pointAutomationService.handleTraceletLocationFix(
+      userId: userId,
+      locationFix: locationFix,
+    );
+
+    return;
+  }
+
+  if (event case tl.HeartbeatEvent()) {
+    await pointAutomationService.handleTraceletHeartbeat(
+      userId: userId,
+    );
+
+    return;
+  }
+
+  if (kDebugMode) {
+    debugPrint(
+      '[TraceletHeadless] Unsupported Tracelet headless event: '
+          '${event.runtimeType}',
+    );
+  }
+
+}
