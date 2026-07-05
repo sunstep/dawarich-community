@@ -1746,42 +1746,42 @@ packages:
     dependency: "direct main"
     description:
       name: tracelet
-      sha256: bac755e3d902cfa9615fd073b0b6ffea5875bddd320696c99900c2ebe38e6b48
+      sha256: "6685bc6d4b43b2990c37c7b1897b5046f393c08d7e25a599b501a7224a0efe5b"
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.3"
+    version: "3.5.4"
   tracelet_android:
     dependency: transitive
     description:
       name: tracelet_android
-      sha256: "507d5b359429beaf7619e18b05e47323bae145e9649b2a81dd1049e3e43f1667"
+      sha256: "558024f51aa8d6c0aeec65b318056d3bbf55e11f39bfbfdaf014e8d1a8a03573"
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.3"
+    version: "3.5.4"
   tracelet_ios:
     dependency: transitive
     description:
       name: tracelet_ios
-      sha256: e31bd8104ab090d08e5baac3682ca5ba1dfed90b6200d5ebef81c574646b6ec7
+      sha256: e71e7dd4b8e69ea90805ecc42c8138fd96f5cc9a520c191a9ce9ef8e31d284c3
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.3"
+    version: "3.5.4"
   tracelet_platform_interface:
     dependency: transitive
     description:
       name: tracelet_platform_interface
-      sha256: a82bdae67199e9dfe81134b17131b26a43a0043df67cf43afea69bbeef2a7fdf
+      sha256: "3b79ab67bae5b1dae3427d1fe5627e210cb36b7b1e5c5a648f816254a2eba61b"
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.3"
+    version: "3.5.4"
   tracelet_web:
     dependency: transitive
     description:
       name: tracelet_web
-      sha256: "56c04c49bc8097c99449312e7dd9236b7fbcd048b61c4c332eb6cdbf6f248a40"
+      sha256: "4e5a3ff624f2e68c9ed79b5683e84fedddfd547c38009669e0686cc19bd64df6"
       url: "https://pub.dev"
     source: hosted
-    version: "3.5.3"
+    version: "3.5.4"
   typed_data:
     dependency: transitive
     description:
