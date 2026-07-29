@@ -175,21 +175,36 @@ final class TraceletTrackerEngine implements ITrackerEngine {
   // Todo: take ownership of the state model
   @override
   Future<tl.State> startTracking(TrackerSettings settings) async {
+    if (kDebugMode) {
+      debugPrint(
+        '$debugPrefix startTracking called with '
+            'mode=${settings.trackingMode}, '
+            'frequency=${settings.trackingFrequency}, '
+            'precision=${settings.locationPrecision}',
+      );
+    }
+
+    final tl.State state;
 
     if (settings.trackingMode == TrackingMode.timer) {
-
       if (kDebugMode) {
-        debugPrint('$debugPrefix Starting Tracelet periodic mode...');
+        debugPrint('$debugPrefix Calling Tracelet.startPeriodic()');
       }
 
-      return await tl.Tracelet.startPeriodic();
+      state = await tl.Tracelet.startPeriodic();
+    } else {
+      if (kDebugMode) {
+        debugPrint('$debugPrefix Calling Tracelet.start()');
+      }
+
+      state = await tl.Tracelet.start();
     }
 
     if (kDebugMode) {
-      debugPrint('$debugPrefix Starting Tracelet automatic mode...');
+      debugPrint('$debugPrefix Tracelet start returned state=$state');
     }
 
-    return await tl.Tracelet.start();
+    return state;
   }
 
   @override
@@ -200,11 +215,26 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
   @override
   Future<tl.State> configure(TrackerSettings settings) async {
+    if (kDebugMode) {
+      debugPrint(
+        '$debugPrefix configure called with '
+            'mode=${settings.trackingMode}, '
+            'frequency=${settings.trackingFrequency}',
+      );
+    }
 
     final tl.Config config = _buildConfiguration(settings);
+
     _registerTraceletLocationCallbackOnce();
     _registerTraceletHeartbeatOnce();
-    return await tl.Tracelet.ready(config);
+
+    final tl.State state = await tl.Tracelet.ready(config);
+
+    if (kDebugMode) {
+      debugPrint('$debugPrefix Tracelet.ready returned state=$state');
+    }
+
+    return state;
   }
 
   @override
@@ -311,7 +341,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
     final tl.ClassifierConfig classifierConfig = tl.ClassifierConfig();
     final tl.ImpactConfig impactConfig = tl.ImpactConfig();
 
-    return tl.Config(
+    final tl.Config config = tl.Config(
       geo: geoConfig,
       app: appConfig,
       android: androidConfig,
@@ -329,6 +359,13 @@ final class TraceletTrackerEngine implements ITrackerEngine {
       classifier: classifierConfig,
       impact: impactConfig,
     );
+
+    _debugPrintEffectiveTraceletConfig(
+      settings: settings,
+      config: config,
+    );
+
+    return config;
   }
 
   // A small helper to ensure 0 doesn't get passed
@@ -350,5 +387,56 @@ final class TraceletTrackerEngine implements ITrackerEngine {
       LocationPrecision.high => tl.DesiredAccuracy.high,
       LocationPrecision.best => tl.DesiredAccuracy.high,
     };
+  }
+
+  void _debugPrintEffectiveTraceletConfig({
+    required TrackerSettings settings,
+    required tl.Config config,
+  }) {
+    if (!kDebugMode) return;
+
+    debugPrint('''
+      $debugPrefix Effective Tracelet config
+      ────────────────────────────────────
+      Dawarich settings:
+        trackingMode: ${settings.trackingMode}
+        trackingFrequency: ${settings.trackingFrequency}
+        locationPrecision: ${settings.locationPrecision}
+        minimumPointDistance: ${settings.minimumPointDistance}
+        automaticTracking: ${settings.automaticTracking}
+        pointsPerBatch: ${settings.pointsPerBatch}
+      
+      Tracelet geo:
+        desiredAccuracy: ${config.geo.desiredAccuracy}
+        periodicDesiredAccuracy: ${config.geo.periodicDesiredAccuracy}
+        distanceFilter: ${config.geo.distanceFilter}
+        periodicLocationInterval: ${config.geo.periodicLocationInterval}
+        enableAdaptiveMode: ${config.geo.enableAdaptiveMode}
+        enableDeadReckoning: ${config.geo.enableDeadReckoning}
+      
+      Tracelet Android:
+        locationUpdateInterval: ${config.android.locationUpdateInterval}
+        fastestLocationUpdateInterval: ${config.android.fastestLocationUpdateInterval}
+        periodicUseForegroundService: ${config.android.periodicUseForegroundService}
+        periodicUseExactAlarms: ${config.android.periodicUseExactAlarms}
+        scheduleUseAlarmManager: ${config.android.scheduleUseAlarmManager}
+        releaseWakelockWhenStationary: ${config.android.releaseWakelockWhenStationary}
+      
+      Tracelet foreground service:
+        enabled: ${config.android.foregroundService.enabled}
+        channelId: ${config.android.foregroundService.channelId}
+        channelName: ${config.android.foregroundService.channelName}
+        title: ${config.android.foregroundService.notificationTitle}
+        text: ${config.android.foregroundService.notificationText}
+        priority: ${config.android.foregroundService.notificationPriority}
+        ongoing: ${config.android.foregroundService.notificationOngoing}
+        showNotificationOnPauseOnly: ${config.android.foregroundService.showNotificationOnPauseOnly}
+      
+      Tracelet app:
+        stopOnTerminate: ${config.app.stopOnTerminate}
+        startOnBoot: ${config.app.startOnBoot}
+        heartbeatInterval: ${config.app.heartbeatInterval}
+      ────────────────────────────────────
+      ''');
   }
 }
