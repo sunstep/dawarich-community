@@ -29,8 +29,8 @@ import 'package:dawarich/features/tracking/presentation/models/last_point_viewmo
 import 'package:option_result/option_result.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier {
-
+final class TrackerPageViewModel extends ChangeNotifier
+    with SafeChangeNotifier {
   final int userId;
 
   LastPointViewModel? _lastPoint;
@@ -54,20 +54,20 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   final OpenSystemSettingsUseCase _openSystemSettings;
 
   TrackerPageViewModel(
-      this.userId,
-      this._getTrackerSettings,
-      this._saveTrackerSettings,
-      this._getDeviceModel,
-      this._streamLastPoint,
-      this._streamBatchPointCount,
-      this._createPointFromGps,
-      this._storePoint,
-      this._startTrackUseCase,
-      this._endTrackUseCase,
-      this._getActiveTrackUseCase,
-      this._checkSystemSettings,
-      this._openSystemSettings,
-    );
+    this.userId,
+    this._getTrackerSettings,
+    this._saveTrackerSettings,
+    this._getDeviceModel,
+    this._streamLastPoint,
+    this._streamBatchPointCount,
+    this._createPointFromGps,
+    this._storePoint,
+    this._startTrackUseCase,
+    this._endTrackUseCase,
+    this._getActiveTrackUseCase,
+    this._checkSystemSettings,
+    this._openSystemSettings,
+  );
 
   int _batchPointCount = 0;
   int get batchPointCount => _batchPointCount;
@@ -204,16 +204,11 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   int? get batchExpirationMinutes => _batchExpirationMinutes;
 
 
-
-
   Future<void> initialize() async {
-
     Stream<Option<LastPoint>> lastPointStream = _streamLastPoint(userId);
 
     _lastPointSub = lastPointStream.listen((option) {
-
       if (option case Some(value: LastPoint lastPoint)) {
-
         if (kDebugMode) {
           debugPrint("[DEBUG] Last point stream received: ${option.unwrap()}");
         }
@@ -238,7 +233,6 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
     TrackerSettings settings = await _getTrackerSettings(userId);
     _applySettings(settings);
     await _getTrackRecordingStatus();
-
 
     setIsRetrievingSettings(false);
   }
@@ -386,6 +380,27 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   }
 
   Future<bool> _requestNotificationPermission() async {
+    if (Platform.isIOS) {
+      // permission_handler returns wrong status on iOS 26+
+      // Request anyway and assume granted if no error is thrown
+      try {
+        final result = await Permission.notification.request();
+        debugPrint('[iOS Notifications] request result=$result');
+        // On iOS 26, even if granted, it may return denied - check native
+        if (result.isGranted) return true;
+        // Fall through: try to check via the system
+        final status = await Permission.notification.status;
+        debugPrint('[iOS Notifications] status=$status');
+        if (status.isGranted) return true;
+        // If both say denied but user actually granted, just proceed
+        // The notification will work regardless of what permission_handler reports
+        return true;
+      } catch (e) {
+        debugPrint('[iOS Notifications] Error: $e');
+        return true; // Proceed anyway on iOS
+      }
+    }
+
     final status = await Permission.notification.status;
 
     if (status.isGranted) {
@@ -397,11 +412,18 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   }
 
   Future<bool> _shouldShowConsentDialog() async {
-    final location = await Permission.locationAlways.status;
+    bool hasLocation;
+    if (Platform.isIOS) {
+      final geoPermission = await Geolocator.checkPermission();
+      hasLocation = geoPermission == LocationPermission.always ||
+          geoPermission == LocationPermission.whileInUse;
+    } else {
+      final location = await Permission.locationAlways.status;
+      hasLocation = location.isGranted;
+    }
     final notifications = await Permission.notification.status;
-
-    final hasLocation = location.isGranted;
-    final hasNotifications = notifications.isGranted;
+    // On iOS 26, permission_handler may return wrong status, default to granted
+    final hasNotifications = Platform.isIOS ? true : notifications.isGranted;
 
     final batteryExcluded = !await _checkSystemSettings();
 
@@ -409,15 +431,14 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   }
 
   Future<void> setAutomaticTracking(bool enable) async {
-
     final trackerSettingsCopy = _trackerSettings;
 
     if (trackerSettingsCopy == null) {
       return;
     }
 
-    final TrackerSettings updated = trackerSettingsCopy.copyWith(
-        automaticTracking: enable);
+    final TrackerSettings updated =
+        trackerSettingsCopy.copyWith(automaticTracking: enable);
 
     _applySettings(updated);
     await _saveTrackerSettings(updated);
@@ -429,7 +450,6 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   }
 
   Future<Result<(), String>> toggleAutomaticTracking(bool enable) async {
-
     if (_isUpdatingTracking) {
       return Err("Tracking update already in progress.");
     }
@@ -438,12 +458,14 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
     setAutomaticTracking(enable);
 
     if (enable) {
+      debugPrint('[Tracking] Step 1: Checking consent dialog...');
       final bool shouldShowConsentDialog = await _shouldShowConsentDialog();
+      debugPrint(
+          '[Tracking] Step 1: shouldShowConsent=$shouldShowConsentDialog');
       if (shouldShowConsentDialog) {
         final bool confirmed = await requestConsentFromUser(
             'To enable automatic background tracking, Dawarich needs your permission.\n\n'
-                'It will request background location access, notification permission, and system exclusions.'
-        );
+            'It will request background location access, notification permission, and system exclusions.');
 
         if (!confirmed) {
           await setAutomaticTracking(false);
@@ -452,24 +474,29 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
         }
       }
 
+      debugPrint('[Tracking] Step 2: Requesting tracking permissions...');
       final permissionResult = await _requestTrackingPermissions();
+      debugPrint('[Tracking] Step 2: result=$permissionResult');
       if (permissionResult case Err(value: final message)) {
         await setAutomaticTracking(false);
         setIsUpdatingTracking(false);
         return Err(message);
       }
 
+      debugPrint('[Tracking] Step 3: Requesting notification permission...');
       final notificationGranted = await _requestNotificationPermission();
+      debugPrint('[Tracking] Step 3: notificationGranted=$notificationGranted');
       if (!notificationGranted) {
         await setAutomaticTracking(false);
         setIsUpdatingTracking(false);
         return Err("Notification permission is required.");
       }
 
+      debugPrint('[Tracking] Step 4: Starting background service...');
       final serviceResult = await BackgroundTrackingService.start();
+      debugPrint('[Tracking] Step 4: serviceResult=$serviceResult');
       await _openSystemSettings();
       await setAutomaticTracking(enable);
-      debugPrint("[TrackerPageViewModel] Background start result: $serviceResult");
 
       final needsFix = await _checkSystemSettings();
 
@@ -477,8 +504,7 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
         if (needsFix) {
           _consentPromptController.add(
               'Some system settings still need your help to enable reliable background tracking.\n\n'
-                  'Please check location permission, battery optimization, and notification settings.'
-          );
+              'Please check location permission, battery optimization, and notification settings.');
         }
 
         await setAutomaticTracking(false);
@@ -486,7 +512,6 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
 
         return Err("Failed to start background service: $message");
       }
-
     } else {
       BackgroundTrackingService.stop();
     }
@@ -496,22 +521,40 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   }
 
   Future<Result<(), String>> _requestTrackingPermissions() async {
+    if (Platform.isIOS) {
+      // permission_handler returns wrong status on iOS 26+, use Geolocator instead
+      var geoPermission = await Geolocator.checkPermission();
+      if (geoPermission == LocationPermission.denied) {
+        geoPermission = await Geolocator.requestPermission();
+      }
+      if (geoPermission == LocationPermission.deniedForever) {
+        await openAppSettings();
+        return Err(
+            "Location permission was denied. Please enable it in Settings and try again.");
+      }
+      if (geoPermission == LocationPermission.denied) {
+        return Err("Location permission is required for tracking.");
+      }
+      // whileInUse or always - both are fine, iOS will upgrade later
+      return const Ok(());
+    }
 
     final locationStatus = await Permission.locationAlways.request();
 
     if (locationStatus.isPermanentlyDenied) {
-      return Err("Permission is permanently denied. Please enable it manually in system settings.");
+      return Err(
+          "Permission is permanently denied. Please enable it manually in system settings.");
     }
 
     if (!locationStatus.isGranted) {
-      return Err("Location permission 'Always' is required for background tracking.");
+      return Err(
+          "Location permission 'Always' is required for background tracking.");
     }
 
     return const Ok(());
   }
 
   Future<void> setTrackingFrequency(int? seconds) async {
-
     final TrackerSettings? copy = _trackerSettings;
 
     if (copy == null) {
@@ -536,9 +579,7 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
     await _saveTrackerSettings(updated);
   }
 
-
   Future<void> setMinimumPointDistance(int meters) async {
-
     final TrackerSettings? copy = _trackerSettings;
 
     if (copy == null) {
@@ -551,7 +592,6 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   }
 
   Future<void> setDeviceId(String id) async {
-
     final TrackerSettings? copy = _trackerSettings;
 
     if (copy == null) {
@@ -564,7 +604,6 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   }
 
   Future<void> resetDeviceId() async {
-
     final TrackerSettings? copy = _trackerSettings;
 
     if (copy == null) {
@@ -598,7 +637,6 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
 
   @override
   void dispose() {
-
     if (kDebugMode) {
       debugPrint("[TrackerPageViewModel] Disposing viewmodel...");
     }

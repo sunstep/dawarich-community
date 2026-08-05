@@ -19,24 +19,50 @@ final class InitializeTrackerNotificationServiceUseCase {
           return;
         }
 
-        if (kDebugMode) {
-          debugPrint('[NotificationService] tapped payload: $payload');
-        }
-
-        final route = AppRouter.routeFromPath(payload);
-        appRouter.push(route);
-      },
+    const androidSettings =
+        AndroidInitializationSettings('ic_bg_service_small');
+    const iosSettings = DarwinInitializationSettings(
+      requestAlertPermission: true,
+      requestBadgePermission: true,
+      requestSoundPermission: true,
     );
 
-    final launchDetails = await _service.getLaunchDetails();
+    const InitializationSettings initializationSettings =
+        InitializationSettings(
+      android: androidSettings,
+      iOS: iosSettings,
+    );
+
+    await _notificationsPlugin.initialize(initializationSettings,
+        onDidReceiveNotificationResponse: _onNotificationTapped);
+
+    final launchDetails =
+        await _notificationsPlugin.getNotificationAppLaunchDetails();
     if (launchDetails?.didNotificationLaunchApp == true) {
       final payload = launchDetails?.notificationResponse?.payload;
       if (payload != null) {
+        if (kDebugMode) {
+          debugPrint(
+              '[NotificationService] App launched from notification with payload: $payload');
+        }
         pendingNotificationRoute = payload;
       }
     }
   }
 
+  static void _onNotificationTapped(NotificationResponse response) {
+    final String? payload = response.payload;
+    if (payload != null) {
+      if (kDebugMode) {
+        debugPrint(
+            '[NotificationService] Notification tapped with payload: $payload');
+      }
+      final route = AppRouter.routeFromPath(payload);
+      appRouter.push(route);
+    }
+  }
+
+  /// Clear the pending route (call after navigation is handled)
   static void clearPendingRoute() {
     pendingNotificationRoute = null;
   }
