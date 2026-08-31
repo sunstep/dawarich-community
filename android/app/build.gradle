@@ -22,7 +22,7 @@ if (hasKeystore) {
     println("[WARN] keystore.properties not found. Falling back to default debug signing for non-release tasks.")
 }
 android {
-    namespace = "com.sunstep.travel"
+    namespace = "dev.abralabs.travel"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -41,7 +41,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.sunstep.travel"
+        applicationId = "dev.abralabs.travel"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
