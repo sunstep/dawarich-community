@@ -345,4 +345,4 @@ jobs:
           releaseFiles: dist/*.aab
           whatsNewDirectory: distribution/whatsnew
           tracks: alpha
-          status: completed
+          status: draft
