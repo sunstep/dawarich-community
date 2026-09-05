@@ -1,9 +1,6 @@
-v0.20.0
+v0.21.0 beta 1
 Highlights of this release:
-* Self signed certificate support
-* Batch expiration setting
-* Auto mode is now the default tracker mode for new installs
-* Improvements and fixes
+* Improvements to tracking
 
 Full release notes are available on GitHub:
 https://github.com/sunstep/dawarich-community/releases
