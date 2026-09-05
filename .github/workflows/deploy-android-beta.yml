@@ -344,5 +344,5 @@ jobs:
           releaseName: ${{ needs.build-gms.outputs.app_version }}+${{ needs.build-gms.outputs.build_number }}
           releaseFiles: dist/*.aab
           whatsNewDirectory: distribution/whatsnew
-          track: beta
+          tracks: alpha
           status: completed
