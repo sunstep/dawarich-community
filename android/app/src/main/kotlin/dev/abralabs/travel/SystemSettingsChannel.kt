@@ -1,4 +1,4 @@
-package com.sunstep.travel
+package dev.abralabs.travel
 
 import android.content.Context
 import android.os.PowerManager
@@ -7,7 +7,7 @@ import io.flutter.plugin.common.MethodChannel
 
 object SystemSettingsChannel {
 
-    private const val CHANNEL = "com.sunstep.travel/system_settings"
+    private const val CHANNEL = "dev.abralabs.travel/system_settings"
 
     fun register(engine: FlutterEngine, context: Context) {
         MethodChannel(engine.dartExecutor.binaryMessenger, CHANNEL)

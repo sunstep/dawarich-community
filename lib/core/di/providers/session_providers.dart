@@ -5,15 +5,15 @@ import 'package:dawarich/features/auth/application/usecases/validate_user_usecas
 import 'package:dawarich_android_user_module/dawarich_android_user_module.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-
-final validateUserUseCaseProvider = FutureProvider<ValidateUserUseCase>((ref) async {
-  final IUserRepository userRepository = await ref.watch(userRepositoryProvider.future);
+final validateUserUseCaseProvider =
+    FutureProvider<ValidateUserUseCase>((ref) async {
+  final IUserRepository userRepository =
+      await ref.watch(userRepositoryProvider.future);
   return ValidateUserUseCase(userRepository);
 });
 
-
-final sessionBoxProvider = FutureProvider<DawarichAndroidUserModule<User>>((ref) async {
-
+final sessionBoxProvider =
+    FutureProvider<DawarichAndroidUserModule<User>>((ref) async {
   ref.keepAlive();
 
   final validateUser = await ref.watch(validateUserUseCaseProvider.future);
@@ -31,7 +31,9 @@ final sessionBoxProvider = FutureProvider<DawarichAndroidUserModule<User>>((ref)
 /// Holds the currently authenticated user.
 /// Set by AuthGuard when navigating to protected routes.
 /// In protected contexts, this is guaranteed to be non-null.
-final authenticatedUserProvider = NotifierProvider<AuthenticatedUserNotifier, User?>(() => AuthenticatedUserNotifier());
+final authenticatedUserProvider =
+    NotifierProvider<AuthenticatedUserNotifier, User?>(
+        () => AuthenticatedUserNotifier());
 
 class AuthenticatedUserNotifier extends Notifier<User?> {
   @override
@@ -49,7 +51,7 @@ final currentUserProvider = Provider<User>((ref) {
   if (user == null) {
     throw StateError(
       'currentUserProvider: User is required but authenticatedUserProvider is null. '
-          'This should be impossible inside guarded routes.',
+      'This should be impossible inside guarded routes.',
     );
   }
   return user;
@@ -65,7 +67,8 @@ final currentUserIdProvider = Provider<int>((ref) {
 /// Async session user (nullable).
 /// Works in background bootstraps because it reads from session storage, not router state.
 final sessionUserProvider = FutureProvider<User?>((ref) async {
-  final DawarichAndroidUserModule<User> box = await ref.watch(sessionBoxProvider.future);
+  final DawarichAndroidUserModule<User> box =
+      await ref.watch(sessionBoxProvider.future);
   return box.getUser();
 });
 
@@ -76,3 +79,7 @@ final sessionUserIdProvider = FutureProvider<int?>((ref) async {
   return user?.id;
 });
 
+/// Tracelet background jobs resolve the user id from session state instead of UI state.
+final traceletBackgroundUserIdProvider = FutureProvider<int?>((ref) async {
+  return ref.watch(sessionUserIdProvider.future);
+});

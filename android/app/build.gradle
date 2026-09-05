@@ -22,7 +22,7 @@ if (hasKeystore) {
     println("[WARN] keystore.properties not found. Falling back to default debug signing for non-release tasks.")
 }
 android {
-    namespace = "com.sunstep.travel"
+    namespace = "dev.abralabs.travel"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
@@ -41,10 +41,10 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.sunstep.travel"
+        applicationId = "dev.abralabs.travel"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 26
         targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -125,6 +125,20 @@ android {
     buildFeatures {
         buildConfig true
     }
+
+    sourceSets {
+        gmsRelease {
+            jniLibs.srcDirs += [
+                    file("../../build/app/intermediates/flutter/gmsRelease/jniLibs")
+            ]
+        }
+
+        fossRelease {
+            jniLibs.srcDirs += [
+                    file("../../build/app/intermediates/flutter/fossRelease/jniLibs")
+            ]
+        }
+    }
 }
 
 // Exclude Google Play Services from FOSS builds only
@@ -147,4 +161,18 @@ rootProject.subprojects { subproject ->
 
 flutter {
     source = "../.."
+}
+
+afterEvaluate {
+    [
+            "GmsRelease" : "gmsRelease",
+            "FossRelease": "fossRelease"
+    ].each { taskSuffix, flutterVariant ->
+        def flutterTask = tasks.findByName("compileFlutterBuild${taskSuffix}")
+        def mergeTask = tasks.findByName("merge${taskSuffix}NativeLibs")
+
+        if (flutterTask != null && mergeTask != null) {
+            mergeTask.dependsOn(flutterTask)
+        }
+    }
 }

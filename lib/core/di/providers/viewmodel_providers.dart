@@ -40,8 +40,11 @@ final trackerPageViewModelProvider = FutureProvider<TrackerPageViewModel>((ref) 
     throw StateError('TrackerPageViewModel requires authenticated user');
   }
 
+
   final vm = TrackerPageViewModel(
     user.id,
+    await ref.watch(pointAutomationServiceProvider.future),
+    await ref.watch(watchTrackerSettingsUseCaseProvider.future),
     await ref.watch(getTrackerSettingsUseCaseProvider.future),
     await ref.watch(saveTrackerSettingsUseCaseProvider.future),
     ref.watch(getDeviceModelUseCaseProvider),

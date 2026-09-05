@@ -5,6 +5,11 @@
 <h1 align="center">Dawarich Mobile Client for Android</h1>
 
 <p align="center">
+  <h3> A message from the owner/ maintainer: This project is not forgotten nor is it not maintained anymore, I just find it hard to find time to dedicate to this project, and I sadly expect this to remain like this for a while. I recommend you to mainly use Dawarich's official mobile app because it is regularly updated and improved. </h3>
+  <h4> So in short, I will continue working on this project when I have time for it, but I have it very busy in my life so there can be big periods where the app does not update. The app will of course keep updating in the future</h4>
+</p>
+
+<p align="center">
   Community-built Android client for
   <a href="https://github.com/Freika/dawarich"><strong>Dawarich</strong></a>
   — a self-hosted location timeline.
@@ -152,11 +157,14 @@ See the [LICENSE](LICENSE) file for details.
 
 ## Stats
 
+### Star History
+Thanks to everyone for 100+ stars!! 
+
 <a href="https://www.star-history.com/?repos=sunstep%2Fdawarich-community&type=date&legend=top-left">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&theme=dark&legend=top-left&sealed_token=FoZGlCCYoIceCmyybTDCEHTNx_YqU4HX845v8dQ6iw3frzzlXbSzZvaEe5F-OBTpqrhensqwa1D2XIwrHXW3B6aLYoRBCzaClybwk2jeG9ifdTJ3ksMYavHuoMDmAiPJYMdLj4Cou0hdNfuMfyS9hNSvgULGonLO0E787_dSYXAH6IYO3BC-FhvLh84d" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left&sealed_token=FoZGlCCYoIceCmyybTDCEHTNx_YqU4HX845v8dQ6iw3frzzlXbSzZvaEe5F-OBTpqrhensqwa1D2XIwrHXW3B6aLYoRBCzaClybwk2jeG9ifdTJ3ksMYavHuoMDmAiPJYMdLj4Cou0hdNfuMfyS9hNSvgULGonLO0E787_dSYXAH6IYO3BC-FhvLh84d" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left&sealed_token=FoZGlCCYoIceCmyybTDCEHTNx_YqU4HX845v8dQ6iw3frzzlXbSzZvaEe5F-OBTpqrhensqwa1D2XIwrHXW3B6aLYoRBCzaClybwk2jeG9ifdTJ3ksMYavHuoMDmAiPJYMdLj4Cou0hdNfuMfyS9hNSvgULGonLO0E787_dSYXAH6IYO3BC-FhvLh84d" />
  </picture>
 </a>
 

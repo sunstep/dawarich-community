@@ -44,7 +44,7 @@
 
         <!-- Receiver to restart background tracking after app update -->
         <receiver
-            android:name=".AppUpdateReceiver"
+            android:name="dev.abralabs.travel.AppUpdateReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -52,7 +52,7 @@
         </receiver>
 
         <activity
-            android:name=".MainActivity"
+            android:name="dev.abralabs.travel.MainActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/LaunchTheme"

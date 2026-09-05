@@ -2,12 +2,13 @@ import 'dart:async';
 import 'dart:io';
 import 'package:dawarich/core/background/schedulers/expired_batch_work_scheduler.dart';
 import 'package:dawarich/core/presentation/safe_change_notifier.dart';
-import 'package:dawarich/features/tracking/application/services/background_tracking_service.dart';
+import 'package:dawarich/features/tracking/application/services/point_automation_service.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_from_gps_workflow.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/store_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/get_device_model_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/get_tracker_settings_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/save_tracker_settings_usecase.dart';
+import 'package:dawarich/features/tracking/application/usecases/settings/watch_tracker_settings_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/stream_last_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/system_settings/check_system_settings_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/system_settings/open_system_settings_usecase.dart';
@@ -40,6 +41,10 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   TrackerSettings? _trackerSettings;
   TrackerSettings? get trackerSettings => _trackerSettings;
 
+  StreamSubscription<TrackerSettings>? _trackerSettingsSub;
+
+  final PointAutomationService _pointAutomationService;
+  final WatchTrackerSettingsUseCase _watchTrackerSettings;
   final GetTrackerSettingsUseCase _getTrackerSettings;
   final SaveTrackerSettingsUseCase _saveTrackerSettings;
   final GetDeviceModelUseCase _getDeviceModel;
@@ -56,6 +61,8 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
 
   TrackerPageViewModel(
       this.userId,
+      this._pointAutomationService,
+      this._watchTrackerSettings,
       this._getTrackerSettings,
       this._saveTrackerSettings,
       this._getDeviceModel,
@@ -208,13 +215,12 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
 
 
   Future<void> initialize() async {
+    final Future<void> initialSettingsLoaded = _startTrackerSettingsWatch();
 
     Stream<Option<LastPoint>> lastPointStream = _streamLastPoint(userId);
 
     _lastPointSub = lastPointStream.listen((option) {
-
       if (option case Some(value: LastPoint lastPoint)) {
-
         if (kDebugMode) {
           debugPrint("[DEBUG] Last point stream received: ${option.unwrap()}");
         }
@@ -232,16 +238,64 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
       if (kDebugMode) {
         debugPrint("[DEBUG] Batch count stream received: $count");
       }
+
       setBatchPointCount(count);
     });
 
-    // Retrieve settings
-    TrackerSettings settings = await _getTrackerSettings(userId);
-    _applySettings(settings);
+    await initialSettingsLoaded;
     await _getTrackRecordingStatus();
 
-
     setIsRetrievingSettings(false);
+  }
+
+  Future<void> _startTrackerSettingsWatch() async {
+    final StreamSubscription<TrackerSettings>? previousSubscription =
+        _trackerSettingsSub;
+
+    if (previousSubscription != null) {
+      await previousSubscription.cancel();
+    }
+
+    final Completer<void> firstSettingsCompleter = Completer<void>();
+    bool hasReceivedFirstSettings = false;
+
+    _trackerSettingsSub = _watchTrackerSettings(userId).listen(
+          (TrackerSettings settings) {
+        if (kDebugMode) {
+          debugPrint(
+            '[TrackerPageViewModel] Tracker settings stream received: '
+                'automaticTracking=${settings.automaticTracking}, '
+                'frequency=${settings.trackingFrequency}, '
+                'precision=${settings.locationPrecision}, '
+                'minimumDistance=${settings.minimumPointDistance}',
+          );
+        }
+
+        _applySettings(settings);
+
+        if (!hasReceivedFirstSettings) {
+          hasReceivedFirstSettings = true;
+
+          if (!firstSettingsCompleter.isCompleted) {
+            firstSettingsCompleter.complete();
+          }
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (kDebugMode) {
+          debugPrint(
+            '[TrackerPageViewModel] Tracker settings stream failed: $error',
+          );
+          debugPrint('$stackTrace');
+        }
+
+        if (!firstSettingsCompleter.isCompleted) {
+          firstSettingsCompleter.completeError(error, stackTrace);
+        }
+      },
+    );
+
+    return firstSettingsCompleter.future;
   }
 
   void _applySettings(TrackerSettings s) {
@@ -443,70 +497,100 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
   }
 
   Future<Result<(), String>> toggleAutomaticTracking(bool enable) async {
-
     if (_isUpdatingTracking) {
-      return Err("Tracking update already in progress.");
+      return Err("Tracking toggle already in progress.");
     }
+
     setIsUpdatingTracking(true);
-    await Future.delayed(const Duration(milliseconds: 500));
-    setAutomaticTracking(enable);
 
-    if (enable) {
-      final bool shouldShowConsentDialog = await _shouldShowConsentDialog();
-      if (shouldShowConsentDialog) {
-        final bool confirmed = await requestConsentFromUser(
-            'To enable automatic background tracking, Dawarich needs your permission.\n\n'
-                'It will request background location access, notification permission, and system exclusions.'
-        );
-
-        if (!confirmed) {
-          await setAutomaticTracking(false);
-          setIsUpdatingTracking(false);
-          return Err("Permission setup cancelled by user.");
-        }
+    try {
+      if (enable) {
+        return await enableAutomaticTracking();
       }
 
-      final permissionResult = await _requestTrackingPermissions();
-      if (permissionResult case Err(value: final message)) {
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-        return Err(message);
+      return await disableAutomaticTracking();
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        debugPrint('[TrackerPageViewModel] Failed to toggle tracking: $e');
+        debugPrint('$stackTrace');
       }
 
-      final notificationGranted = await _requestNotificationPermission();
-      if (!notificationGranted) {
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-        return Err("Notification permission is required.");
+      return Err("Failed to toggle tracking: $e");
+    } finally {
+      setIsUpdatingTracking(false);
+    }
+  }
+
+  Future<Result<(), String>> enableAutomaticTracking() async {
+
+    final bool shouldShowConsentDialog = await _shouldShowConsentDialog();
+
+    if (shouldShowConsentDialog) {
+
+      final bool confirmed = await requestConsentFromUser(
+        'To enable automatic background tracking, Dawarich Community needs '
+            'background location and notification permissions.\n\n'
+            'You may also be asked to adjust optional device settings to improve '
+            'background tracking reliability.',
+      );
+
+      if (!confirmed) {
+        return Err("Permission setup cancelled.");
       }
-
-      final serviceResult = await BackgroundTrackingService.start();
-      await _openSystemSettings();
-      await setAutomaticTracking(enable);
-      debugPrint("[TrackerPageViewModel] Background start result: $serviceResult");
-
-      final needsFix = await _checkSystemSettings();
-
-      if (serviceResult case Err(value: final message)) {
-        if (needsFix) {
-          _consentPromptController.add(
-              'Some system settings still need your help to enable reliable background tracking.\n\n'
-                  'Please check location permission, battery optimization, and notification settings.'
-          );
-        }
-
-        await setAutomaticTracking(false);
-        setIsUpdatingTracking(false);
-
-        return Err("Failed to start background service: $message");
-      }
-
-    } else {
-      BackgroundTrackingService.stop();
     }
 
-    setIsUpdatingTracking(false);
+    final permissionResult = await _requestTrackingPermissions();
+
+    if (permissionResult case Err(value: final message)) {
+      return Err(message);
+    }
+
+    final notificationGranted = await _requestNotificationPermission();
+    if (!notificationGranted) {
+      return Err("Notification permission is required.");
+    }
+
+    final serviceResult = await _pointAutomationService.startTracking(userId);
+
+    if (kDebugMode){
+      debugPrint("[TrackerPageViewModel] Background start result: $serviceResult");
+    }
+
+    if (serviceResult case Err(value: final message)) {
+
+      return Err("Failed to start background service: $message");
+    }
+
+    final needsFix = await _checkSystemSettings();
+
+    if (needsFix) {
+
+      final shouldOpenSettings = await requestConsentFromUser(
+        'Automatic tracking has started successfully.\n\n'
+            'Some optional device settings may improve background tracking '
+            'reliability, especially when Dawarich Community runs in the '
+            'background.\n\n'
+            'Would you like to review these settings now?',
+      );
+
+      if (shouldOpenSettings) {
+        await _openSystemSettings();
+      }
+
+    }
+
     return Ok(());
+  }
+
+  Future<Result<(), String>> disableAutomaticTracking() async {
+    final Result<(), String> stopResult =
+    await _pointAutomationService.stopTracking(userId);
+
+    if (stopResult case Err(value: final message)) {
+      return Err(message);
+    }
+
+    return const Ok(());
   }
 
   Future<Result<(), String>> _requestTrackingPermissions() async {
@@ -612,15 +696,15 @@ final class TrackerPageViewModel extends ChangeNotifier with SafeChangeNotifier 
 
   @override
   void dispose() {
-
     if (kDebugMode) {
       debugPrint("[TrackerPageViewModel] Disposing viewmodel...");
     }
 
-    _settingsSub?.cancel();
+    _trackerSettingsSub?.cancel();
     _lastPointSub?.cancel();
     _batchCountSub?.cancel();
     _consentPromptController.close();
+
     super.dispose();
   }
 }
