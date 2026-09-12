@@ -160,11 +160,11 @@ See the [LICENSE](LICENSE) file for details.
 ### Star History
 Thanks to everyone for 100+ stars!! 
 
-<a href="https://www.star-history.com/?repos=sunstep%2Fdawarich-community&type=date&legend=top-left">
+<a href="https://www.star-history.com/">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&theme=dark&legend=top-left&sealed_token=FoZGlCCYoIceCmyybTDCEHTNx_YqU4HX845v8dQ6iw3frzzlXbSzZvaEe5F-OBTpqrhensqwa1D2XIwrHXW3B6aLYoRBCzaClybwk2jeG9ifdTJ3ksMYavHuoMDmAiPJYMdLj4Cou0hdNfuMfyS9hNSvgULGonLO0E787_dSYXAH6IYO3BC-FhvLh84d" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left&sealed_token=FoZGlCCYoIceCmyybTDCEHTNx_YqU4HX845v8dQ6iw3frzzlXbSzZvaEe5F-OBTpqrhensqwa1D2XIwrHXW3B6aLYoRBCzaClybwk2jeG9ifdTJ3ksMYavHuoMDmAiPJYMdLj4Cou0hdNfuMfyS9hNSvgULGonLO0E787_dSYXAH6IYO3BC-FhvLh84d" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left&sealed_token=FoZGlCCYoIceCmyybTDCEHTNx_YqU4HX845v8dQ6iw3frzzlXbSzZvaEe5F-OBTpqrhensqwa1D2XIwrHXW3B6aLYoRBCzaClybwk2jeG9ifdTJ3ksMYavHuoMDmAiPJYMdLj4Cou0hdNfuMfyS9hNSvgULGonLO0E787_dSYXAH6IYO3BC-FhvLh84d" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sunstep/dawarich-community&type=date&legend=top-left" />
  </picture>
 </a>
 
