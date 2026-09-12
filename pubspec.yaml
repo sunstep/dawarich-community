@@ -53,7 +53,7 @@ dependencies:
   riverpod_annotation: ^4.0.2
   shared_preferences: ^2.5.4
   shimmer: ^3.0.0
-  sqlcipher_flutter_libs: ^0.6.8
+  sqlcipher_flutter_libs: ^0.7.0+eol
   sqlite3: ^2.9.0
   uuid: ^4.5.2
   url_launcher: ^6.3.1
