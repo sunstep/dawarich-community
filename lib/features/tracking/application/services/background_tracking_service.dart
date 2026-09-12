@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dawarich/core/constants/notification.dart';
 import 'package:dawarich/core/domain/models/user.dart';
 import 'package:flutter/foundation.dart';
@@ -16,8 +17,6 @@ import 'background_tracking_entrypoint.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_batch_point_count_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_last_point_usecase.dart';
 
-
-
 class BackgroundTrackingEntry {
   static ProviderContainer? _container;
 
@@ -32,7 +31,8 @@ class BackgroundTrackingEntry {
     return container;
   }
 
-  static Future<void> checkBackgroundTracking(ServiceInstance backgroundService) async {
+  static Future<void> checkBackgroundTracking(
+      ServiceInstance backgroundService) async {
     if (kDebugMode) {
       debugPrint('[Background] Injecting background thread dependencies...');
     }
@@ -47,7 +47,8 @@ class BackgroundTrackingEntry {
         // Dispose old container and create fresh one on retry
         if (attempt > 1) {
           if (kDebugMode) {
-            debugPrint('[Background] Retry attempt $attempt/3 - recreating container...');
+            debugPrint(
+                '[Background] Retry attempt $attempt/3 - recreating container...');
           }
           _container?.dispose();
           _container = null;
@@ -68,7 +69,8 @@ class BackgroundTrackingEntry {
         }
       } catch (e, s) {
         if (kDebugMode) {
-          debugPrint('[Background] Error during initialization (attempt $attempt/3): $e\n$s');
+          debugPrint(
+              '[Background] Error during initialization (attempt $attempt/3): $e\n$s');
         }
         // Dispose container on error to ensure clean retry
         _container?.dispose();
@@ -77,13 +79,15 @@ class BackgroundTrackingEntry {
     }
 
     if (user == null || container == null) {
-      if (kDebugMode) debugPrint('[Background] No user in session after retries — exiting.');
+      if (kDebugMode)
+        debugPrint('[Background] No user in session after retries — exiting.');
       await shutdown(backgroundService, 'No user session');
       return;
     }
 
     try {
-      final getSettings = await container.read(getTrackerSettingsUseCaseProvider.future);
+      final getSettings =
+          await container.read(getTrackerSettingsUseCaseProvider.future);
       final settings = await getSettings(user.id);
       if (!settings.automaticTracking) {
         if (kDebugMode) {
@@ -94,7 +98,8 @@ class BackgroundTrackingEntry {
       }
     } catch (e, s) {
       if (kDebugMode) {
-        debugPrint('[Background] Failed to load tracker settings ($e) → shutting down.\n$s');
+        debugPrint(
+            '[Background] Failed to load tracker settings ($e) → shutting down.\n$s');
       }
       await shutdown(backgroundService, 'Settings load failed');
       return;
@@ -112,13 +117,17 @@ class BackgroundTrackingEntry {
       debugPrint('[Background] Starting background tracking...');
     }
 
-    final automation = await container.read(pointAutomationServiceProvider.future);
+    final automation =
+        await container.read(pointAutomationServiceProvider.future);
     await automation.startTracking(userId);
 
     try {
-      final getLastPoint = await container.read(getLastPointUseCaseProvider.future);
-      final getBatchCount = await container.read(getBatchPointCountUseCaseProvider.future);
-      await setInitialForegroundNotification(getLastPoint, getBatchCount, backgroundService, userId);
+      final getLastPoint =
+          await container.read(getLastPointUseCaseProvider.future);
+      final getBatchCount =
+          await container.read(getBatchPointCountUseCaseProvider.future);
+      await setInitialForegroundNotification(
+          getLastPoint, getBatchCount, backgroundService, userId);
     } catch (_) {
       // ignore
     }
@@ -130,7 +139,8 @@ class BackgroundTrackingEntry {
       try {
         final container = _container;
         if (container != null) {
-          final automation = await container.read(pointAutomationServiceProvider.future);
+          final automation =
+              await container.read(pointAutomationServiceProvider.future);
           await automation.stopTracking();
         }
       } catch (e, s) {
@@ -182,7 +192,8 @@ class BackgroundTrackingEntry {
       if (lastPointResult case Some(value: final lp)) {
         await backgroundService.setForegroundNotificationInfo(
           title: 'Dawarich Tracking',
-          content: 'Last updated at: ${lp.timestamp.toLocal()}, $batchPointCount points in batch.',
+          content:
+              'Last updated at: ${lp.timestamp.toLocal()}, $batchPointCount points in batch.',
         );
       } else {
         await backgroundService.setForegroundNotificationInfo(
@@ -192,16 +203,13 @@ class BackgroundTrackingEntry {
       }
     }
   }
-
 }
 
 @pragma('vm:entry-point')
 final class BackgroundTrackingService {
-
   static bool _configured = false;
   static Completer<void>? _starting;
   static bool _isStopping = false;
-
 
   static Future<void> ensureNotificationChannelExists() async {
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
@@ -211,16 +219,16 @@ final class BackgroundTrackingService {
       importance: Importance.low,
     );
 
-    final FlutterLocalNotificationsPlugin plugin = FlutterLocalNotificationsPlugin();
+    final FlutterLocalNotificationsPlugin plugin =
+        FlutterLocalNotificationsPlugin();
 
     await plugin
         .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
+            AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);
   }
 
   static Future<void> installConfigurationOnce() async {
-
     if (_configured) {
       return;
     }
@@ -246,7 +254,6 @@ final class BackgroundTrackingService {
     _configured = true;
   }
 
-
   /// Start (if needed) and configure the background service.
   /// Safe/idempotent across concurrent callers
   static Future<void> configureService({bool force = false}) async {
@@ -269,10 +276,10 @@ final class BackgroundTrackingService {
         final sub = service.on('ready').listen((_) {
           if (!ready.isCompleted) ready.complete();
         });
-        await ready.future.timeout(const Duration(seconds: 5), onTimeout: () {});
+        await ready.future
+            .timeout(const Duration(seconds: 5), onTimeout: () {});
         await sub.cancel();
       }
-
 
       _starting!.complete();
     } catch (e, s) {
@@ -285,18 +292,38 @@ final class BackgroundTrackingService {
   }
 
   static Future<Result<(), String>> start() async {
-
-    if (!(await Permission.notification.isGranted)) {
-      debugPrint('[BackgroundService] Notification permission missing.');
-      return Err("Notification permission is required.");
+    // On iOS 26+, permission_handler returns wrong notification status
+    if (!Platform.isIOS) {
+      if (!(await Permission.notification.isGranted)) {
+        debugPrint('[BackgroundService] Notification permission missing.');
+        return Err("Notification permission is required.");
+      }
     }
 
-    final locEnabled = await Geolocator.isLocationServiceEnabled();
-    final always = await Permission.locationAlways.status;
-    final hasBgPermission = always.isGranted;
+    try {
+      final locEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!locEnabled) {
+        return Err("Location services are disabled.");
+      }
 
-    if (!locEnabled || !hasBgPermission) {
-      return Err("Background location permission is required.");
+      // Use Geolocator for permission check on iOS (permission_handler returns
+      // wrong status on iOS 26+)
+      bool hasBgPermission;
+      if (Platform.isIOS) {
+        final geoPermission = await Geolocator.checkPermission();
+        hasBgPermission = geoPermission == LocationPermission.always ||
+            geoPermission == LocationPermission.whileInUse;
+      } else {
+        final always = await Permission.locationAlways.status;
+        hasBgPermission = always.isGranted;
+      }
+
+      if (!hasBgPermission) {
+        return Err("Background location permission is required.");
+      }
+    } catch (e) {
+      debugPrint('[BackgroundService] Error checking permissions: $e');
+      return Err("Unable to check location permissions.");
     }
 
     await installConfigurationOnce();
@@ -308,9 +335,7 @@ final class BackgroundTrackingService {
     }
 
     final started = await FlutterBackgroundService().startService();
-    return started
-        ? Ok(())
-        : Err("Failed to start background service.");
+    return started ? Ok(()) : Err("Failed to start background service.");
   }
 
   static Future<void> stop() async {
@@ -331,21 +356,25 @@ final class BackgroundTrackingService {
     final sub = service.on('stopped').listen((event) {
       final eventId = event?['requestId'];
       if (eventId == requestId) {
-        debugPrint('[BackgroundService] Stop confirmed for requestId $requestId.');
+        debugPrint(
+            '[BackgroundService] Stop confirmed for requestId $requestId.');
         stopCompleter.complete();
       } else {
-        debugPrint('[BackgroundService] Received unrelated stop event with requestId $eventId.');
+        debugPrint(
+            '[BackgroundService] Received unrelated stop event with requestId $eventId.');
       }
     });
 
-    debugPrint('[BackgroundService] Sending stopService request with ID $requestId...');
+    debugPrint(
+        '[BackgroundService] Sending stopService request with ID $requestId...');
     service.invoke('stopService', {'requestId': requestId});
 
     try {
       await stopCompleter.future.timeout(
         const Duration(seconds: 3),
         onTimeout: () {
-          debugPrint('[BackgroundService] Stop confirmation timed out for requestId $requestId.');
+          debugPrint(
+              '[BackgroundService] Stop confirmation timed out for requestId $requestId.');
         },
       );
     } catch (_) {
