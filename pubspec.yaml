@@ -23,7 +23,7 @@ dependencies:
       ref: main
   device_info_plus: ^12.3.0
   device_region: ^1.4.0
-  dio: ^5.9.1
+  dio: ^5.9.2
   drift: ^2.31.0
   fl_chart: ^1.1.1
   flutter_background_service: ^5.1.0
