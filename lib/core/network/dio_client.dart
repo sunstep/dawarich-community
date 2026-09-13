@@ -14,7 +14,26 @@ final class DioClient {
     receiveTimeout: const Duration(seconds: 20),
   )) {
     _dio.interceptors.addAll(interceptors);
-    _dio.httpClientAdapter = NativeAdapter();
+    try {
+      _dio.httpClientAdapter = NativeAdapter(
+        createCronetEngine: () => CronetEngine.build(
+          cacheMode: CacheMode.memory,
+          cacheMaxSize: 1024 * 1024 * 10,
+          enableBrotli: true,
+          enableHttp2: true,
+          enablePublicKeyPinningBypassForLocalTrustAnchors: true,
+          enableQuic: false,
+          storagePath: null,
+          userAgent: 'Dawarich Community',
+          quicHints: null,
+        ),
+      );
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[DioClient] NativeAdapter init failed; using default adapter: $e');
+        debugPrint('$st');
+      }
+    }
 
     assert(() {
       _dio.interceptors.add(LogInterceptor(
