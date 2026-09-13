@@ -12,4 +12,8 @@ abstract interface class ITrackerEngine {
   Future<tl.State> stopTracking();
   Future<tl.State> configure(TrackerSettings settings);
   Future<tl.State> updateConfiguration(TrackerSettings settings);
+  Future<void> updateForegroundNotification({
+    required String title,
+    required String body,
+  });
 }
