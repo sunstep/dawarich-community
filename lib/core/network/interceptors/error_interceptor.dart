@@ -18,6 +18,19 @@ final class ErrorInterceptor extends Interceptor {
     final RemoteRequestFailure failure = _map(err);
 
     if (kDebugMode) {
+      debugPrint('--- Dio raw error (interceptor) ---');
+      debugPrint('type: ${err.type}');
+      debugPrint('message: ${err.message}');
+      debugPrint('error: ${err.error}');
+      debugPrint('errorType: ${err.error.runtimeType}');
+      debugPrint('uri: ${err.requestOptions.uri}');
+      debugPrint('method: ${err.requestOptions.method}');
+      debugPrint('headers: ${err.requestOptions.headers}');
+      debugPrint('query: ${err.requestOptions.queryParameters}');
+      debugPrint('status: ${err.response?.statusCode}');
+      debugPrint('responseHeaders: ${err.response?.headers.map}');
+      debugPrint('responseData: ${err.response?.data}');
+      debugPrint('stack: ${err.stackTrace}');
       debugPrint('--- RemoteRequestFailure ---');
       debugPrint(failure.debugString);
     }
@@ -71,6 +84,10 @@ final class ErrorInterceptor extends Interceptor {
 
       case DioExceptionType.unknown:
         return UnexpectedFailure(technical: e.message);
+
+
+      case DioExceptionType.transformTimeout:
+        return UnexpectedFailure(technical: 'Request transform timeout.');
     }
   }
 
