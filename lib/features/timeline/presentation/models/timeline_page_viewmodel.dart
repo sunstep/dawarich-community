@@ -90,7 +90,7 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   }
 
   void setPoints(List<LatLng> points) {
-    _points = points;
+    _points = List<LatLng>.of(points);
     safeNotifyListeners();
   }
 
@@ -100,7 +100,7 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   }
 
   void setLocalPoints(List<LatLng> points) {
-    _localPoints = points;
+    _localPoints = List<LatLng>.of(points);
     safeNotifyListeners();
   }
 
@@ -110,7 +110,8 @@ final class TimelineViewModel extends ChangeNotifier with SafeChangeNotifier {
   }
 
   void clearPoints() {
-    _points.clear();
+    _points = <LatLng>[];
+    _localPoints = <LatLng>[];
     _lastApiTimestampMs = null;
     safeNotifyListeners();
   }

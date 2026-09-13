@@ -11,7 +11,7 @@ final class ConnectRepository implements IConnectRepository {
   static const _timeout = Duration(seconds: 20);
 
   String _normalizeBase(String hostWithProtocol) {
-    return hostWithProtocol.trim().replaceAll(RegExp(r'\/+$'), '');
+    return hostWithProtocol.trim().replaceAll(RegExp(r'/+$'), '');
   }
 
   Dio _createPlainDio(String baseUrl, {String? apiKey}) {
@@ -29,19 +29,7 @@ final class ConnectRepository implements IConnectRepository {
 
     final dioClient = Dio(options);
     try {
-      dioClient.httpClientAdapter = NativeAdapter(
-        createCronetEngine: () => CronetEngine.build(
-          cacheMode: CacheMode.memory,
-          cacheMaxSize: 1024 * 1024 * 10,
-          enableBrotli: true,
-          enableHttp2: true,
-          enablePublicKeyPinningBypassForLocalTrustAnchors: true,
-          enableQuic: false,
-          storagePath: null,
-          userAgent: 'Dawarich Community',
-          quicHints: null,
-        ),
-      );
+      dioClient.httpClientAdapter = NativeAdapter();
     } catch (e, st) {
       if (kDebugMode) {
         debugPrint('[ConnectRepository] NativeAdapter init failed; using default adapter: $e');
@@ -85,7 +73,7 @@ final class ConnectRepository implements IConnectRepository {
       }
 
       try {
-        final fallbackDio = _createPlainDioWithoutNativeAdapter(base);
+        final fallbackDio = _createPlainDio(base);
         final fallbackResp = await fallbackDio.get('/api/v1/health');
         return fallbackResp.statusCode == 200;
       } on DioException catch (fallbackError) {
