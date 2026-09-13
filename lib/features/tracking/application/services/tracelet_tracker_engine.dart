@@ -248,12 +248,13 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
     final bool isAutoMode = settings.trackingMode == TrackingMode.automatic;
 
+    final double distanceFilter = isAutoMode ? (settings.minimumPointDistance > 0.0 ?
+    settings.minimumPointDistance.toDouble() : 20)
+        : settings.minimumPointDistance.toDouble();
+
     final tl.GeoConfig geoConfig = tl.GeoConfig(
       desiredAccuracy: _mapDesiredAccuracy(settings.locationPrecision),
-      distanceFilter:
-        settings.minimumPointDistance > 0 ?
-        settings.minimumPointDistance.toDouble() :
-        20.0,
+      distanceFilter: distanceFilter,
       stationaryRadius: 25.0,
       locationTimeout: 60,
       disableElasticity: false,
