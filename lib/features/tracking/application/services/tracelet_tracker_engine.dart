@@ -244,16 +244,35 @@ final class TraceletTrackerEngine implements ITrackerEngine {
     return await tl.Tracelet.setConfig(config);
   }
 
+  @override
+  Future<void> updateForegroundNotification({
+    required String title,
+    required String body,
+  }) async {
+    final tl.Config config = tl.Config(
+      android: tl.AndroidConfig(
+        foregroundService: tl.ForegroundServiceConfig(
+          notificationTitle: title,
+          notificationText: body,
+        ),
+      ),
+    );
+
+    await tl.Tracelet.setConfig(config);
+    await tl.Tracelet.updateNotification();
+  }
+
   tl.Config _buildConfiguration(TrackerSettings settings) {
 
     final bool isAutoMode = settings.trackingMode == TrackingMode.automatic;
 
+    final double distanceFilter = isAutoMode ? (settings.minimumPointDistance > 0.0 ?
+    settings.minimumPointDistance.toDouble() : 20)
+        : settings.minimumPointDistance.toDouble();
+
     final tl.GeoConfig geoConfig = tl.GeoConfig(
       desiredAccuracy: _mapDesiredAccuracy(settings.locationPrecision),
-      distanceFilter:
-        settings.minimumPointDistance > 0 ?
-        settings.minimumPointDistance.toDouble() :
-        20.0,
+      distanceFilter: distanceFilter,
       stationaryRadius: 25.0,
       locationTimeout: 60,
       disableElasticity: false,

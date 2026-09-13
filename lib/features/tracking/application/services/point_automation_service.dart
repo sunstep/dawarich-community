@@ -58,10 +58,14 @@ final class PointAutomationService {
 
       _attachTrackingHandlers(userId);
       await _trackerEngine.startTracking(updatedSettings);
-
-      await _persistAutomaticTracking(userId, true);
+      await _trackerEngine.updateForegroundNotification(
+        title: 'Tracking active',
+        body: 'Acquiring first point...',
+      );
 
       unawaited(_refreshNotification(userId));
+
+      await _persistAutomaticTracking(userId, true);
 
       return const Ok(());
     } catch (e, st) {
@@ -317,9 +321,10 @@ final class PointAutomationService {
         None() => '--:--:--',
       };
 
-      _showTrackerNotification(
+      final String body = 'Last point: $lastPointTimeStr • $batchCount in batch';
+      await _trackerEngine.updateForegroundNotification(
         title: 'Tracking active',
-        body: 'Last point: $lastPointTimeStr • $batchCount in batch',
+        body: body,
       );
     } catch (e, s) {
       debugPrint('[PointAutomation] Notification refresh error: $e\n$s');
