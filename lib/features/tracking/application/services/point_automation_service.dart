@@ -58,10 +58,7 @@ final class PointAutomationService {
 
       _attachTrackingHandlers(userId);
       await _trackerEngine.startTracking(updatedSettings);
-      await _trackerEngine.updateForegroundNotification(
-        title: 'Tracking active',
-        body: 'Acquiring first point...',
-      );
+      await _trackerEngine.updateForegroundNotification();
 
       unawaited(_refreshNotification(userId));
 

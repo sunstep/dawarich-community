@@ -246,19 +246,23 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
   @override
   Future<void> updateForegroundNotification({
-    required String title,
-    required String body,
+    String? title,
+    String? body,
   }) async {
-    final tl.Config config = tl.Config(
-      android: tl.AndroidConfig(
-        foregroundService: tl.ForegroundServiceConfig(
-          notificationTitle: title,
-          notificationText: body,
-        ),
-      ),
-    );
 
-    await tl.Tracelet.setConfig(config);
+    if (title != null || body != null) {
+      final tl.Config config = tl.Config(
+        android: tl.AndroidConfig(
+          foregroundService: tl.ForegroundServiceConfig(
+            notificationTitle: title,
+            notificationText: body,
+          ),
+        ),
+      );
+
+      await tl.Tracelet.setConfig(config);
+    }
+
     await tl.Tracelet.updateNotification();
   }
 
