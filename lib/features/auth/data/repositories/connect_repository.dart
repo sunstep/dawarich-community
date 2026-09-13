@@ -2,6 +2,7 @@ import 'package:dawarich/features/auth/data/data_transfer_objects/users/user_dto
 import 'package:dawarich/features/auth/application/repositories/connect_repository_interfaces.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:cronet_http/cronet_http.dart';
 import 'package:native_dio_adapter/native_dio_adapter.dart';
 import 'package:option_result/option_result.dart';
 
@@ -27,8 +28,43 @@ final class ConnectRepository implements IConnectRepository {
     );
 
     final dioClient = Dio(options);
-    dioClient.httpClientAdapter = NativeAdapter();
+    try {
+      dioClient.httpClientAdapter = NativeAdapter(
+        createCronetEngine: () => CronetEngine.build(
+          cacheMode: CacheMode.memory,
+          cacheMaxSize: 1024 * 1024 * 10,
+          enableBrotli: true,
+          enableHttp2: true,
+          enablePublicKeyPinningBypassForLocalTrustAnchors: true,
+          enableQuic: false,
+          storagePath: null,
+          userAgent: 'Dawarich Community',
+          quicHints: null,
+        ),
+      );
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[ConnectRepository] NativeAdapter init failed; using default adapter: $e');
+        debugPrint('$st');
+      }
+    }
     return dioClient;
+  }
+
+  Dio _createPlainDioWithoutNativeAdapter(String baseUrl, {String? apiKey}) {
+    final options = BaseOptions(
+      baseUrl: baseUrl,
+      connectTimeout: _timeout,
+      receiveTimeout: _timeout,
+      responseType: ResponseType.json,
+      headers: apiKey == null
+          ? null
+          : <String, dynamic>{
+              'Authorization': '******',
+            },
+    );
+
+    return Dio(options);
   }
 
   @override
@@ -41,9 +77,32 @@ final class ConnectRepository implements IConnectRepository {
       return resp.statusCode == 200;
     } on DioException catch (e) {
       if (kDebugMode) {
-        debugPrint('[testHost] failed for $base: ${e.type} ${e.message}');
+        debugPrint(
+          '[testHost] native-adapter attempt failed for $base: '
+          'type=${e.type}, message=${e.message}, '
+          'error=${e.error}, status=${e.response?.statusCode}',
+        );
       }
-      return false;
+
+      try {
+        final fallbackDio = _createPlainDioWithoutNativeAdapter(base);
+        final fallbackResp = await fallbackDio.get('/api/v1/health');
+        return fallbackResp.statusCode == 200;
+      } on DioException catch (fallbackError) {
+        if (kDebugMode) {
+          debugPrint(
+            '[testHost] fallback attempt failed for $base: '
+            'type=${fallbackError.type}, message=${fallbackError.message}, '
+            'error=${fallbackError.error}, status=${fallbackError.response?.statusCode}',
+          );
+        }
+        return false;
+      } catch (fallbackError) {
+        if (kDebugMode) {
+          debugPrint('[testHost] fallback attempt failed for $base: $fallbackError');
+        }
+        return false;
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('[testHost] failed for $base: $e');
