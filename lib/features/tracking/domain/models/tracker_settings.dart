@@ -11,6 +11,8 @@ final class TrackerSettings {
   final int pointsPerBatch;
   final int? batchExpirationMinutes;
   final String deviceId;
+  static const int automaticDefaultMinimumDistanceMeters = 20;
+
 
   const TrackerSettings({
     required this.userId,
@@ -34,6 +36,18 @@ final class TrackerSettings {
     }
 
     return TrackingMode.automatic;
+  }
+
+  int get effectiveMinimumPointDistanceMeters {
+    if (minimumPointDistance > 0) {
+      return minimumPointDistance;
+    }
+
+    if (trackingMode == TrackingMode.automatic) {
+      return automaticDefaultMinimumDistanceMeters;
+    }
+
+    return 0;
   }
 
   TrackerSettings copyWith({
