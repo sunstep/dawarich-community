@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dawarich/core/background/workmanager/stats_refresh_worker.dart';
 import 'package:dawarich/core/di/providers/session_providers.dart';
 import 'package:dawarich/core/di/providers/usecase_providers.dart';
@@ -16,6 +14,7 @@ import 'package:dawarich_android_user_module/dawarich_android_user_module.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:option_result/option_result.dart';
 
 final class StartupService {
   static Future<void> initializeAppFromContainer(ProviderContainer container) async {
@@ -37,6 +36,29 @@ final class StartupService {
       }
 
       sessionService.setUserId(refreshedSessionUser.id);
+
+      try {
+        final pointAutomationService =
+        await container.read(pointAutomationServiceProvider.future);
+
+        final resumeResult =
+        await pointAutomationService.resumeTrackingIfEnabled(
+          refreshedSessionUser.id,
+        );
+
+        if (resumeResult case Err(value: final message)) {
+          debugPrint('[StartupService] $message');
+        }
+      } catch (error, stackTrace) {
+        // Tracking restoration must not prevent the application from opening.
+        debugPrint(
+          '[StartupService] Unable to restore tracking runtime: $error',
+        );
+
+        if (kDebugMode) {
+          debugPrint('$stackTrace');
+        }
+      }
 
       // Initialize the lock tracker with persisted auth time for this user.
       final appSettingsRepo =
