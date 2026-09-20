@@ -4,7 +4,6 @@ import 'package:dawarich/features/batch/application/usecases/get_current_batch_u
 import 'package:dawarich/features/tracking/application/interfaces/tracker_engine_interface.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_batch_point_count_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_last_point_usecase.dart';
-import 'package:dawarich/features/tracking/application/usecases/notifications/show_tracker_notification_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/store_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/get_tracker_settings_usecase.dart';
@@ -13,6 +12,7 @@ import 'package:dawarich/features/tracking/domain/models/location_fix.dart';
 import 'package:dawarich/features/tracking/domain/models/tracker_settings.dart';
 import 'package:flutter/foundation.dart';
 import 'package:option_result/option_result.dart';
+import 'package:tracelet/tracelet.dart';
 
 final class PointAutomationService {
 
@@ -21,13 +21,13 @@ final class PointAutomationService {
   final StorePointUseCase _storePoint;
   final GetLastPointUseCase _getLastPoint;
   final GetBatchPointCountUseCase _getBatchPointCount;
-  final ShowTrackerNotificationUseCase _showTrackerNotification;
   final GetCurrentBatchUseCase _getCurrentBatch;
   final BatchUploadWorkflowUseCase _batchUploadWorkflow;
   final GetTrackerSettingsUseCase _getTrackerSettings;
   final SaveTrackerSettingsUseCase _saveTrackerSettings;
 
   Future<void> _trackingProcessingChain = Future.value();
+  Future<void>? _headlessRuntimeReadyFuture;
 
   PointAutomationService(
       this._trackerEngine,
@@ -35,7 +35,6 @@ final class PointAutomationService {
       this._storePoint,
       this._getLastPoint,
       this._getBatchPointCount,
-      this._showTrackerNotification,
       this._getCurrentBatch,
       this._batchUploadWorkflow,
       this._getTrackerSettings,
@@ -54,13 +53,14 @@ final class PointAutomationService {
         automaticTracking: true,
       );
 
-      await _trackerEngine.configure(updatedSettings);
-
       _attachTrackingHandlers(userId);
-      await _trackerEngine.startTracking(updatedSettings);
-      await _trackerEngine.updateForegroundNotification();
+      final State state = await _trackerEngine.configure(updatedSettings);
 
-      unawaited(_refreshNotification(userId));
+      if (!state.enabled) {
+        await _trackerEngine.startTracking(updatedSettings);
+      }
+
+      await _refreshNotification(userId);
 
       await _persistAutomaticTracking(userId, true);
 
@@ -86,6 +86,94 @@ final class PointAutomationService {
       }
 
       return Err('Failed to start tracking: $e');
+    }
+  }
+
+  /// Restores the Dart-side Tracelet runtime after the app process starts.
+  ///
+  /// This does not change the user's persisted tracking preference.
+  Future<Result<(), String>> resumeTrackingIfEnabled(int userId) async {
+    try {
+      final TrackerSettings settings = await _getTrackerSettings(userId);
+
+      if (!settings.automaticTracking) {
+        if (kDebugMode) {
+          debugPrint(
+            '[PointAutomation] Runtime resume skipped; tracking is disabled.',
+          );
+        }
+
+        return const Ok(());
+      }
+
+      if (kDebugMode) {
+        debugPrint('[PointAutomation] Restoring Tracelet runtime...');
+      }
+
+      _attachTrackingHandlers(userId);
+
+      final state = await _trackerEngine.configure(settings);
+
+      if (!state.enabled) {
+        await _trackerEngine.startTracking(settings);
+      }
+
+      await _refreshNotification(userId);
+
+      return const Ok(());
+    } catch (error, stackTrace) {
+      _detachTrackingHandlers();
+
+      if (kDebugMode) {
+        debugPrint(
+          '[PointAutomation] Failed to restore Tracelet runtime: $error',
+        );
+        debugPrint('$stackTrace');
+      }
+
+      return Err('Failed to restore tracking runtime: $error');
+    }
+  }
+
+  /// Initializes Tracelet inside the long-lived headless Flutter isolate.
+  ///
+  /// Native Tracelet can continue tracking while the current Dart runtime has
+  /// never called ready(). setConfig() still requires ready() in that runtime.
+  Future<bool> ensureHeadlessRuntimeReady(int userId) async {
+    final TrackerSettings settings = await _getTrackerSettings(userId);
+
+    if (!settings.automaticTracking) {
+      _headlessRuntimeReadyFuture = null;
+
+      if (kDebugMode) {
+        debugPrint(
+          '[PointAutomation] Ignoring headless event; tracking is disabled.',
+        );
+      }
+
+      return false;
+    }
+
+    await (_headlessRuntimeReadyFuture ??=
+        _configureHeadlessRuntime(settings));
+
+    return true;
+  }
+
+  Future<void> _configureHeadlessRuntime(
+      TrackerSettings settings,
+      ) async {
+    try {
+      await _trackerEngine.configure(settings);
+
+      if (kDebugMode) {
+        debugPrint(
+          '[PointAutomation] Headless Tracelet runtime is ready.',
+        );
+      }
+    } catch (error) {
+      _headlessRuntimeReadyFuture = null;
+      rethrow;
     }
   }
 

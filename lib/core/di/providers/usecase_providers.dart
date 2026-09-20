@@ -259,7 +259,6 @@ final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((r
   final storePoint = await ref.watch(storePointUseCaseProvider.future);
   final getLastPoint = await ref.watch(getLastPointUseCaseProvider.future);
   final batchCount = await ref.watch(getBatchPointCountUseCaseProvider.future);
-  final showNotif = ref.watch(showTrackerNotificationUseCaseProvider);
   final getSettings = await ref.watch(getTrackerSettingsUseCaseProvider.future);
   final saveSettings = await ref.watch(saveTrackerSettingsUseCaseProvider.future);
 
@@ -272,7 +271,6 @@ final pointAutomationServiceProvider = FutureProvider<PointAutomationService>((r
     storePoint,
     getLastPoint,
     batchCount,
-    showNotif,
     getCurrentBatch,
     batchUploadWorkflow,
     getSettings,

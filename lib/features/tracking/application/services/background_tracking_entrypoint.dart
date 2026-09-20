@@ -6,8 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tracelet/tracelet.dart' as tl;
 
-import 'dart:async';
-
 @pragma('vm:entry-point')
 Future<void> dawarichTraceletHeadlessTask(tl.HeadlessEvent event) async {
   try {
@@ -63,10 +61,11 @@ Future<void> _handleDawarichTraceletHeadlessEvent(
     final Map<String, Object?> payload =
     _asStringObjectMap(envelope['event']);
 
-    if (name == 'providerchange' || name == 'motionchange') {
+    if (name != 'location' && name != 'heartbeat') {
       if (kDebugMode) {
         debugPrint('[TraceletHeadless] Ignoring Tracelet event: $name');
       }
+
       return;
     }
 
@@ -79,6 +78,16 @@ Future<void> _handleDawarichTraceletHeadlessEvent(
       if (kDebugMode) {
         debugPrint('[TraceletHeadless] No session user available; skipping.');
       }
+      return;
+    }
+
+    final PointAutomationService pointAutomationService =
+    await container.read(pointAutomationServiceProvider.future);
+
+    final bool runtimeReady =
+    await pointAutomationService.ensureHeadlessRuntimeReady(userId);
+
+    if (!runtimeReady) {
       return;
     }
 
@@ -95,9 +104,6 @@ Future<void> _handleDawarichTraceletHeadlessEvent(
         }
         return;
       }
-
-      final PointAutomationService pointAutomationService =
-      await container.read(pointAutomationServiceProvider.future);
 
       await pointAutomationService.handleTraceletLocationFix(
         userId: userId,
@@ -117,8 +123,6 @@ Future<void> _handleDawarichTraceletHeadlessEvent(
     }
 
     if (name == 'heartbeat') {
-      final PointAutomationService pointAutomationService =
-      await container.read(pointAutomationServiceProvider.future);
 
       await pointAutomationService.handleTraceletHeartbeat(userId: userId);
       return;
