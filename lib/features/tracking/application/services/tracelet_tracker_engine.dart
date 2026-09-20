@@ -270,9 +270,8 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
     final bool isAutoMode = settings.trackingMode == TrackingMode.automatic;
 
-    final double distanceFilter = isAutoMode ? (settings.minimumPointDistance > 0.0 ?
-    settings.minimumPointDistance.toDouble() : 20)
-        : settings.minimumPointDistance.toDouble();
+    final double distanceFilter = settings.effectiveMinimumPointDistanceMeters
+        .toDouble();
 
     final tl.GeoConfig geoConfig = tl.GeoConfig(
       desiredAccuracy: _mapDesiredAccuracy(settings.locationPrecision),
@@ -326,7 +325,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
       locationUpdateInterval: _streamLocationUpdateIntervalMs,
       fastestLocationUpdateInterval: _fastestStreamLocationUpdateIntervalMs,
       deferTime: 0,
-      allowIdenticalLocations: true,
+      allowIdenticalLocations: false,
       geofenceModeHighAccuracy: false,
       periodicUseForegroundService: true,
       periodicUseExactAlarms: false,
