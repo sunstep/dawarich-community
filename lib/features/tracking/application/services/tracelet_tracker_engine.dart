@@ -19,6 +19,11 @@ final class TraceletTrackerEngine implements ITrackerEngine {
   static const int _streamLocationUpdateIntervalMs = 5000;
   static const int _fastestStreamLocationUpdateIntervalMs = 2500;
 
+  static const int _heartbeatIntervalSeconds = 60;
+  static const int _automaticStopTimeoutMinutes = 5;
+  static const double _automaticStationaryRadiusMeters = 50.0;
+  static const double _defaultStationaryRadiusMeters = 25.0;
+
   static bool _isTraceletLocationCallbackRegistered = false;
   static bool _isTraceletHeartbeatCallbackRegistered = false;
   static String? _lastLocationUuid;
@@ -246,19 +251,23 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
   @override
   Future<void> updateForegroundNotification({
-    required String title,
-    required String body,
+    String? title,
+    String? body,
   }) async {
-    final tl.Config config = tl.Config(
-      android: tl.AndroidConfig(
-        foregroundService: tl.ForegroundServiceConfig(
-          notificationTitle: title,
-          notificationText: body,
-        ),
-      ),
-    );
 
-    await tl.Tracelet.setConfig(config);
+    if (title != null || body != null) {
+      final tl.Config config = tl.Config(
+        android: tl.AndroidConfig(
+          foregroundService: tl.ForegroundServiceConfig(
+            notificationTitle: title,
+            notificationText: body,
+          ),
+        ),
+      );
+
+      await tl.Tracelet.setConfig(config);
+    }
+
     await tl.Tracelet.updateNotification();
   }
 
@@ -266,14 +275,15 @@ final class TraceletTrackerEngine implements ITrackerEngine {
 
     final bool isAutoMode = settings.trackingMode == TrackingMode.automatic;
 
-    final double distanceFilter = isAutoMode ? (settings.minimumPointDistance > 0.0 ?
-    settings.minimumPointDistance.toDouble() : 20)
-        : settings.minimumPointDistance.toDouble();
+    final double distanceFilter = settings.effectiveMinimumPointDistanceMeters
+        .toDouble();
 
     final tl.GeoConfig geoConfig = tl.GeoConfig(
       desiredAccuracy: _mapDesiredAccuracy(settings.locationPrecision),
       distanceFilter: distanceFilter,
-      stationaryRadius: 25.0,
+      stationaryRadius: isAutoMode
+          ? _automaticStationaryRadiusMeters
+          : _defaultStationaryRadiusMeters,
       locationTimeout: 60,
       disableElasticity: false,
       elasticityMultiplier: 1.0,
@@ -298,7 +308,7 @@ final class TraceletTrackerEngine implements ITrackerEngine {
     final tl.AppConfig appConfig = tl.AppConfig(
       stopOnTerminate: false,
       startOnBoot: true,
-      heartbeatInterval: 30,
+      heartbeatInterval: _heartbeatIntervalSeconds,
       schedule: const <String>[],
     );
 
@@ -322,12 +332,11 @@ final class TraceletTrackerEngine implements ITrackerEngine {
       locationUpdateInterval: _streamLocationUpdateIntervalMs,
       fastestLocationUpdateInterval: _fastestStreamLocationUpdateIntervalMs,
       deferTime: 0,
-      allowIdenticalLocations: true,
-      geofenceModeHighAccuracy: false,
+      allowIdenticalLocations: false,
       periodicUseForegroundService: true,
       periodicUseExactAlarms: false,
       scheduleUseAlarmManager: false,
-      releaseWakelockWhenStationary: false,
+      releaseWakelockWhenStationary: isAutoMode,
       foregroundService: foregroundServiceConfig,
     );
 
@@ -348,7 +357,13 @@ final class TraceletTrackerEngine implements ITrackerEngine {
       debug: kDebugMode
     );
 
-    final tl.MotionConfig motionConfig = tl.MotionConfig();
+    final tl.MotionConfig motionConfig = isAutoMode
+        ? const tl.MotionConfig(
+      motionDetectionMode: tl.MotionDetectionMode.smart,
+      stationaryTrackingMode: tl.StationaryTrackingMode.geofences,
+      stopTimeout: _automaticStopTimeoutMinutes,
+    )
+        : const tl.MotionConfig();
 
     final tl.GeofenceConfig geofenceConfig = tl.GeofenceConfig();
     final tl.PersistenceConfig persistenceConfig = tl.PersistenceConfig();

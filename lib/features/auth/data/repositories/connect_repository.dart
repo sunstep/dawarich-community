@@ -2,7 +2,6 @@ import 'package:dawarich/features/auth/data/data_transfer_objects/users/user_dto
 import 'package:dawarich/features/auth/application/repositories/connect_repository_interfaces.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cronet_http/cronet_http.dart';
 import 'package:native_dio_adapter/native_dio_adapter.dart';
 import 'package:option_result/option_result.dart';
 
@@ -39,21 +38,6 @@ final class ConnectRepository implements IConnectRepository {
     return dioClient;
   }
 
-  Dio _createPlainDioWithoutNativeAdapter(String baseUrl, {String? apiKey}) {
-    final options = BaseOptions(
-      baseUrl: baseUrl,
-      connectTimeout: _timeout,
-      receiveTimeout: _timeout,
-      responseType: ResponseType.json,
-      headers: apiKey == null
-          ? null
-          : <String, dynamic>{
-              'Authorization': '******',
-            },
-    );
-
-    return Dio(options);
-  }
 
   @override
   Future<bool> testHost(String hostWithProtocol) async {
