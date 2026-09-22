@@ -1,0 +1,7 @@
+v0.21.0 beta 4
+Highlights of this release:
+* Fixed issues with tracking notification
+* Slight tracker resource usage reduction
+
+Full release notes are available on GitHub:
+https://github.com/sunstep/dawarich-community/releases
