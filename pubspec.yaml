@@ -43,7 +43,7 @@ dependencies:
   latlong2: ^0.9.1
   local_auth: ^3.0.1
   network_info_plus: ^7.0.0
-  option_result: ^3.2.1
+  option_result: ^3.3.0
   package_info_plus: ^9.0.0
   path: ^1.9.1
   path_provider: ^2.1.5
