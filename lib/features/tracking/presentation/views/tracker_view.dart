@@ -62,7 +62,8 @@ final class TrackerView extends ConsumerWidget {
 /// This widget is the original tracker page content entry-point.
 final class _TrackerViewContentBody extends StatefulWidget {
   @override
-  State<_TrackerViewContentBody> createState() => _TrackerViewContentBodyState();
+  State<_TrackerViewContentBody> createState() =>
+      _TrackerViewContentBodyState();
 }
 
 class _TrackerViewContentBodyState extends State<_TrackerViewContentBody> {
@@ -73,7 +74,8 @@ class _TrackerViewContentBodyState extends State<_TrackerViewContentBody> {
     super.didChangeDependencies();
 
     // Subscribe to consent prompt stream (only once)
-    _consentSub ??= context.read<TrackerPageViewModel>().onConsentPrompt.listen((message) {
+    _consentSub ??=
+        context.read<TrackerPageViewModel>().onConsentPrompt.listen((message) {
       if (!mounted) return;
       _showConsentDialog(message);
     });
@@ -313,8 +315,7 @@ class LastPointCard extends StatelessWidget {
   }
 }
 
-
-class _SettingsCard extends StatefulWidget {
+class _SettingsCard extends StatelessWidget {
   const _SettingsCard();
 
   @override
