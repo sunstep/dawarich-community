@@ -2,7 +2,7 @@ name: dawarich
 description: "Dawarich mobile companion app"
 publish_to: 'none'
 
-version: 0.21.0+261021379
+version: 0.21.0+260922659
 
 environment:
   sdk: ^3.5.0
@@ -12,16 +12,16 @@ dependencies:
     sdk: flutter
   auto_mappr: ^2.14.0
   auto_mappr_annotation: ^2.3.0
-  android_intent_plus: ^6.0.0
+  android_intent_plus: ^6.1.0
   auto_route: ^11.1.0
-  battery_plus: ^7.0.0
-  connectivity_plus: ^7.0.0
+  battery_plus: ^7.1.2
+  connectivity_plus: ^7.3.1
   country: ^6.0.3
   dawarich_android_user_module:
     git:
       url: https://github.com/sunstep/dawarich-android-user-module
       ref: main
-  device_info_plus: ^12.3.0
+  device_info_plus: ^13.3.0
   device_region: ^1.4.0
   dio: ^5.11.1
   native_dio_adapter: ^1.8.0
@@ -42,9 +42,9 @@ dependencies:
   json_annotation: ^4.10.0
   latlong2: ^0.9.1
   local_auth: ^3.0.1
-  network_info_plus: ^7.0.0
+  network_info_plus: ^8.2.1
   option_result: ^3.2.1
-  package_info_plus: ^9.0.0
+  package_info_plus: ^10.2.2
   path: ^1.9.1
   path_provider: ^2.1.5
   permission_handler: ^12.0.1
@@ -73,6 +73,7 @@ dev_dependencies:
   freezed: ^3.2.5
   json_serializable: ^6.12.0
   riverpod_generator: ^4.0.3
+  tracelet_doctor: ^3.8.8
 
 flutter_icons:
   android: true
