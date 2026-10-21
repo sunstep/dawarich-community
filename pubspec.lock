@@ -1759,7 +1759,7 @@ packages:
     source: hosted
     version: "3.8.8"
   tracelet_doctor:
-    dependency: "direct dev"
+    dependency: "direct main"
     description:
       name: tracelet_doctor
       sha256: "742a8584ac6198b04d192af680aed4570941f9597bcacedd994290f62f7c77db"

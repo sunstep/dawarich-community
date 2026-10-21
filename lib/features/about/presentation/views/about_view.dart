@@ -1,7 +1,9 @@
 import 'package:auto_route/auto_route.dart';
 import 'package:dawarich/core/theme/app_gradients.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:tracelet_doctor/tracelet_doctor.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 @RoutePage()
@@ -113,6 +115,21 @@ class _AboutViewState extends State<AboutView> {
                   ),
 
                   const SizedBox(height: 32),
+
+                  if (kDebugMode) ...[
+                    _InfoCard(
+                      icon: Icons.bug_report_outlined,
+                      title: 'Developer Tools',
+                      body: 'Inspect Tracelet tracking diagnostics, '
+                          'foreground service health, permissions and logs.',
+                      action: OutlinedButton.icon(
+                        onPressed: () => TraceletDoctor.show(context),
+                        icon: const Icon(Icons.medical_services_outlined),
+                        label: const Text('Open Tracelet Doctor'),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
 
                   // ── Subtle footer ──
                   Text(
