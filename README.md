@@ -77,7 +77,7 @@
       <strong>Now available on Google Play</strong><br/>
       Install Dawarich (Community) here:
       <a href="https://play.google.com/store/apps/details?id=com.sunstep.dawarich">
-        play.google.com/store/apps/details?id=com.sunstep.dawarich
+        play.google.com/store/apps/details?id=dev.abralabs.travel
       </a>
     </td>
   </tr>
