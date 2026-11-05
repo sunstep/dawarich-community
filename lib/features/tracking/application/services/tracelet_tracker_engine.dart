@@ -366,7 +366,9 @@ final class TraceletTrackerEngine implements ITrackerEngine {
         : const tl.MotionConfig();
 
     final tl.GeofenceConfig geofenceConfig = tl.GeofenceConfig();
-    final tl.PersistenceConfig persistenceConfig = tl.PersistenceConfig();
+    final tl.PersistenceConfig persistenceConfig = tl.PersistenceConfig(
+      persistMode: tl.PersistMode.none
+    );
     final tl.AuditConfig auditConfig = tl.AuditConfig();
     final tl.PrivacyZoneConfig privacyZoneConfig = tl.PrivacyZoneConfig();
     final tl.SecurityConfig securityConfig = tl.SecurityConfig();

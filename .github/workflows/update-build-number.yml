@@ -30,7 +30,9 @@ jobs:
           set -euo pipefail
 
           # YYMMDDCCC: 9-digit build number, 2-minute granularity, always increasing.
-          _CCC=$(( ( $(date -u +%H) * 60 + $(date -u +%M) ) / 2 ))
+          _HOUR=$(date -u +%H)
+          _MINUTE=$(date -u +%M)
+          _CCC=$(( (10#$_HOUR * 60 + 10#$_MINUTE) / 2 ))
           BUILD_NUMBER=$(printf '%s%03d' "$(date -u +%y%m%d)" "$_CCC")
 
           for f in pubspec.yaml pubspec-foss.yaml pubspec-gms.yaml; do
@@ -51,4 +53,3 @@ jobs:
           git commit -m "chore: update build number to ${BUILD_NUMBER} [skip ci]"
           git push origin dev
           echo "Build number updated to ${BUILD_NUMBER}"
-
