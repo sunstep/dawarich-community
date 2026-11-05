@@ -19,10 +19,6 @@ import 'package:dawarich/features/stats/data/sources/remote/stats_remote_data_so
 import 'package:dawarich/features/stats/presentation/converters/countries_mapper.dart';
 import 'package:dawarich/features/tracking/application/repositories/location_provider_interface.dart';
 import 'package:dawarich/features/tracking/application/services/tracelet_tracker_engine.dart';
-import 'package:dawarich/features/tracking/application/services/tracking_notification_service.dart';
-import 'package:dawarich/features/tracking/application/usecases/notifications/cancel_tracker_notification_usecase.dart';
-import 'package:dawarich/features/tracking/application/usecases/notifications/initialize_tracker_notification_usecase.dart';
-import 'package:dawarich/features/tracking/application/usecases/notifications/was_launched_from_notification_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_usecase.dart';
 import 'package:dawarich/features/tracking/data/repositories/location_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,7 +38,6 @@ import 'package:dawarich/features/tracking/application/repositories/tracker_sett
 import 'package:dawarich/features/tracking/application/services/point_automation_service.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_batch_point_count_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/get_last_point_usecase.dart';
-import 'package:dawarich/features/tracking/application/usecases/notifications/show_tracker_notification_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/create_point_from_gps_workflow.dart';
 import 'package:dawarich/features/tracking/application/usecases/point_creation/store_point_usecase.dart';
 import 'package:dawarich/features/tracking/application/usecases/settings/get_device_model_usecase.dart';
@@ -179,35 +174,7 @@ final watchTrackerSettingsUseCaseProvider = FutureProvider<WatchTrackerSettingsU
   return WatchTrackerSettingsUseCase(repo);
 });
 
-final trackerNotificationServiceProvider = Provider<TrackerNotificationService>((ref) {
-  return TrackerNotificationService();
-});
 
-final initializeTrackerNotificationServiceUseCaseProvider =
-Provider<InitializeTrackerNotificationServiceUseCase>((ref) {
-  return InitializeTrackerNotificationServiceUseCase(
-    ref.watch(trackerNotificationServiceProvider),
-  );
-});
-
-
-final showTrackerNotificationUseCaseProvider = Provider<ShowTrackerNotificationUseCase>((ref) {
-  return ShowTrackerNotificationUseCase(
-    ref.watch(trackerNotificationServiceProvider),
-  );
-});
-
-final cancelTrackerNotificationUseCaseProvider = Provider<CancelTrackerNotificationUseCase>((ref) {
-  return CancelTrackerNotificationUseCase(
-    ref.watch(trackerNotificationServiceProvider),
-  );
-});
-
-final wasLaunchedFromNotificationUseCaseProvider = Provider<WasLaunchedFromNotificationUseCase>((ref) {
-  return WasLaunchedFromNotificationUseCase(
-    ref.watch(trackerNotificationServiceProvider),
-  );
-});
 final getBatchPointCountUseCaseProvider = FutureProvider<GetBatchPointCountUseCase>((ref) async {
   final repo = await ref.watch(pointLocalRepositoryProvider.future);
   return GetBatchPointCountUseCase(repo);
