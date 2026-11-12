@@ -1746,50 +1746,50 @@ packages:
     dependency: "direct main"
     description:
       name: tracelet
-      sha256: c01bf7685c66230df04d6e23900eb3afc24b115850b35c410006421fc9ca1475
+      sha256: ea9496fd4112bef2f6a99fd6a605b2fc1139b09d81e3bf0cbc4d3d566260a533
       url: "https://pub.dev"
     source: hosted
-    version: "3.8.9"
+    version: "3.8.10"
   tracelet_android:
     dependency: transitive
     description:
       name: tracelet_android
-      sha256: bb6e97035ff66fdcaca006157e9a185fbfe047a1bebbcf13cc159b055169177e
+      sha256: "7154567866c5f9a34b527d7bb3aee652d370e14b81ef32ac4bb24f2ba07ddb80"
       url: "https://pub.dev"
     source: hosted
-    version: "3.8.9"
+    version: "3.8.10"
   tracelet_doctor:
     dependency: "direct main"
     description:
       name: tracelet_doctor
-      sha256: "62631f5f1035ae8f4e1da3f943fade52ffcc9dfac0e3cfbfb7d2c38c4ebba1bf"
+      sha256: "44bd01223186bf627a7ebc2a05207759dd4ac367a40c8423d8fdde1ae5d327c9"
       url: "https://pub.dev"
     source: hosted
-    version: "3.8.9"
+    version: "3.8.10"
   tracelet_ios:
     dependency: transitive
     description:
       name: tracelet_ios
-      sha256: "2988abdd1963e3afed3fdd97d9c0360019df3704ba8fb6b635d0381b122f1231"
+      sha256: "548db9069690ae1a74c84cf451864ff514b12d64aa2448b6f6df5e91475d0b41"
       url: "https://pub.dev"
     source: hosted
-    version: "3.8.9"
+    version: "3.8.10"
   tracelet_platform_interface:
     dependency: transitive
     description:
       name: tracelet_platform_interface
-      sha256: "25d21e92db5ee24a09aca5ec052073e5d98d9e62645b3679eaf35a9ff9728af1"
+      sha256: "69aeb0611985c5721e46240d62287542debc42b066f6b64769987610a6c64267"
       url: "https://pub.dev"
     source: hosted
-    version: "3.8.9"
+    version: "3.8.10"
   tracelet_web:
     dependency: transitive
     description:
       name: tracelet_web
-      sha256: "94b4d46f356cbd19e4c5909af6e0c9f2791c80c44f426268279b659592778fb9"
+      sha256: c6ada9be0be5fc7c2360c16841508be27b00ec4b9096bf659ac9963f2bdeddb6
       url: "https://pub.dev"
     source: hosted
-    version: "3.8.9"
+    version: "3.8.10"
   typed_data:
     dependency: transitive
     description:
