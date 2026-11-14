@@ -1,0 +1,6 @@
+v0.21.0 beta 6
+Highlights of this release:
+* Fixed a bug causing the tracker to lose ability to retrieve GPS
+
+Full release notes are available on GitHub:
+https://github.com/sunstep/dawarich-community/releases
