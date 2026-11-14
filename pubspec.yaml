@@ -2,7 +2,7 @@ name: dawarich
 description: "Dawarich mobile companion app"
 publish_to: 'none'
 
-version: 0.21.0+261105396
+version: 0.21.0+261112457
 
 environment:
   sdk: ^3.5.0
@@ -55,8 +55,8 @@ dependencies:
   shimmer: ^3.0.0
   sqlcipher_flutter_libs: ^0.6.8
   sqlite3: ^2.9.0
-  tracelet: ^3.8.9
-  tracelet_doctor: ^3.8.9
+  tracelet: ^3.8.10
+  tracelet_doctor: ^3.8.10
   uuid: ^4.5.2
   url_launcher: ^6.3.1
   workmanager: ^0.9.0+3
