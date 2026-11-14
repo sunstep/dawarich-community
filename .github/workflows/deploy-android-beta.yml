@@ -82,12 +82,25 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
-      - name: Setup Flutter (from .flutter-version)
+      - name: Read Flutter version
+        id: flutter-version
+        shell: bash
+        run: |
+          VERSION="$(tr -d '\r\n[:space:]' < .flutter-version)"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version-file: .flutter-version
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
           channel: stable
           cache: true
+
+      - name: Verify Flutter version
+        shell: bash
+        run: |
+          test "$(flutter --version --machine | jq -r '.frameworkVersion')" = "${{ steps.flutter-version.outputs.version }}"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -201,12 +214,25 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
 
-      - name: Setup Flutter (from .flutter-version)
+      - name: Read Flutter version
+        id: flutter-version
+        shell: bash
+        run: |
+          VERSION="$(tr -d '\r\n[:space:]' < .flutter-version)"
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version-file: .flutter-version
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
           channel: stable
           cache: true
+
+      - name: Verify Flutter version
+        shell: bash
+        run: |
+          test "$(flutter --version --machine | jq -r '.frameworkVersion')" = "${{ steps.flutter-version.outputs.version }}"
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -344,5 +370,5 @@ jobs:
           releaseName: ${{ needs.build-gms.outputs.app_version }}+${{ needs.build-gms.outputs.build_number }}
           releaseFiles: dist/*.aab
           whatsNewDirectory: distribution/whatsnew
-          tracks: alpha
-          status: draft
+          tracks: beta
+          status: completed
