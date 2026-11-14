@@ -1213,10 +1213,10 @@ packages:
     dependency: "direct main"
     description:
       name: option_result
-      sha256: "65970e41e6c1ad687be006a7f23ccb159380e84b70ce4c289648d726dfe8dbc4"
+      sha256: "664afe3e8324b109e5e492f9a0a79989004a3a3f6cd7a7378ac09489ec990cbe"
       url: "https://pub.dev"
     source: hosted
-    version: "3.2.1"
+    version: "3.3.0"
   package_config:
     dependency: transitive
     description:
