@@ -282,7 +282,7 @@ jobs:
         run: |
           VLINE=$(grep '^version:' pubspec.yaml | head -1 | awk '{print $2}')
           APP_VERSION="${VLINE%%+*}"
-          BUILD_NUMBER="$(git rev-list --count HEAD)"
+          BUILD_NUMBER="${VLINE##*+}"
           echo "app_version=$APP_VERSION"   >> "$GITHUB_OUTPUT"
           echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
 
