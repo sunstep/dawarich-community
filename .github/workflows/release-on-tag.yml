@@ -380,31 +380,37 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          
+
           SPONSORS_FILE="distribution/contributors/sponsors.txt"
           CODE_FILE="distribution/contributors/code.txt"
           OUT="/tmp/contributors.md"
-          
+
           {
             if [ -f "$CODE_FILE" ] && [ -s "$CODE_FILE" ]; then
               echo "## Code Contributors"
               echo
               echo "Thanks to:"
-              while IFS= read -r line; do
-                [ -n "$line" ] && echo "- $line"
+
+              while IFS='|' read -r username display_name || [[ -n "$username" ]]; do
+                if [[ -n "$username" ]]; then
+                  printf -- '- [%s (@%s)](https://github.com/%s)\n' \
+                    "${display_name:-$username}" "$username" "$username"
+                fi
               done < "$CODE_FILE"
+
               echo
             fi
-          
+
             if [ -f "$SPONSORS_FILE" ] && [ -s "$SPONSORS_FILE" ]; then
-              SPONSOR_NAMES=$(python -c "from pathlib import Path; names=[line.strip() for line in Path('$SPONSORS_FILE').read_text().splitlines() if line.strip()]; print('' if not names else names[0] if len(names)==1 else f'{names[0]} & {names[1]}' if len(names)==2 else ', '.join(names[:-1]) + f' & {names[-1]}')")
+              SPONSOR_NAMES=$(python -c "from pathlib import Path; names=[line.strip() for line in Path('$SPONSORS_FILE').read_text().splitlines() if line.strip()]; print('' if not names else names[0] if len(names)==1 else f'{names[0]} & {names[1]}' if len(names)==2 else ', '.join(names[:-1]) + f' & {names[-1]}' if len(names)>2 else names[0]")
+
               echo "## The real heroes"
               echo
               echo "💚 Huge thanks to ${SPONSOR_NAMES} for sponsoring the project 💚"
               echo
             fi
           } > "$OUT"
-          
+
           echo "path=$OUT" >> "$GITHUB_OUTPUT"
 
       - name: Generate GitHub notes
