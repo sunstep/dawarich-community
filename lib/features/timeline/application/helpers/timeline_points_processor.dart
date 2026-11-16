@@ -5,9 +5,13 @@ import 'package:latlong2/latlong.dart';
 
 final class TimelinePointsProcessor {
 
-  List<LatLng> processPoints(List<SlimApiPoint> points) {
+  List<LatLng> processPoints(
+    List<SlimApiPoint> points, {
+    int distanceThresholdMeters = 50,
+  }) {
     final List<SlimApiPoint> sortedPoints = _sortPoints(points);
-    final List<SlimApiPoint> mergedPoints = _mergePoints(sortedPoints);
+    final List<SlimApiPoint> mergedPoints =
+        _mergePoints(sortedPoints, distanceThresholdMeters);
     return _parsePoints(mergedPoints);
   }
 
@@ -26,8 +30,8 @@ final class TimelinePointsProcessor {
     return data;
   }
 
-  List<SlimApiPoint> _mergePoints(List<SlimApiPoint> points) {
-    const double distanceThreshold = 50;
+  List<SlimApiPoint> _mergePoints(
+      List<SlimApiPoint> points, int distanceThresholdMeters) {
     final List<SlimApiPoint> mergedPoints = [];
 
     if (points.isNotEmpty) {
@@ -41,7 +45,7 @@ final class TimelinePointsProcessor {
         final pointPair = PointPair(currentPoint, nextPoint);
         final double dist = pointPair.calculateDistance();
 
-        if (dist >= distanceThreshold) {
+        if (dist >= distanceThresholdMeters) {
           mergedPoints.add(points[i]);
           currentPoint = nextPoint;
         }

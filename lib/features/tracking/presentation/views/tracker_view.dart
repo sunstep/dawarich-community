@@ -324,7 +324,7 @@ class _SettingsCard extends StatefulWidget {
 class _SettingsCardState extends State<_SettingsCard> {
   late PageController _pageController;
   int _currentPage = 0;
-  static const int _pageCount = 6;
+  static const int _pageCount = 7;
 
   @override
   void initState() {

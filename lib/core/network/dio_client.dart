@@ -1,6 +1,7 @@
 import 'package:dawarich/core/network/errors/remote_request_failure.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:native_dio_adapter/native_dio_adapter.dart';
 import 'package:option_result/option_result.dart';
 
 final class DioClient {
@@ -13,6 +14,26 @@ final class DioClient {
     receiveTimeout: const Duration(seconds: 20),
   )) {
     _dio.interceptors.addAll(interceptors);
+    try {
+      _dio.httpClientAdapter = NativeAdapter(
+        createCronetEngine: () => CronetEngine.build(
+          cacheMode: CacheMode.memory,
+          cacheMaxSize: 1024 * 1024 * 10,
+          enableBrotli: true,
+          enableHttp2: true,
+          enablePublicKeyPinningBypassForLocalTrustAnchors: true,
+          enableQuic: false,
+          storagePath: null,
+          userAgent: 'Dawarich Community',
+          quicHints: null,
+        ),
+      );
+    } catch (e, st) {
+      if (kDebugMode) {
+        debugPrint('[DioClient] NativeAdapter init failed; using default adapter: $e');
+        debugPrint('$st');
+      }
+    }
 
     assert(() {
       _dio.interceptors.add(LogInterceptor(
@@ -30,6 +51,22 @@ final class DioClient {
       final v = await block();
       return Ok(v);
     } on DioException catch (e) {
+      if (kDebugMode) {
+        debugPrint('--- DioException (safe) ---');
+        debugPrint('type: ${e.type}');
+        debugPrint('message: ${e.message}');
+        debugPrint('error: ${e.error}');
+        debugPrint('errorType: ${e.error.runtimeType}');
+        debugPrint('uri: ${e.requestOptions.uri}');
+        debugPrint('method: ${e.requestOptions.method}');
+        debugPrint('headers: ${e.requestOptions.headers}');
+        debugPrint('query: ${e.requestOptions.queryParameters}');
+        debugPrint('status: ${e.response?.statusCode}');
+        debugPrint('responseHeaders: ${e.response?.headers.map}');
+        debugPrint('responseData: ${e.response?.data}');
+        debugPrint('stack: ${e.stackTrace}');
+      }
+
       final f = e.error is RemoteRequestFailure
           ? e.error as RemoteRequestFailure
           : UnexpectedFailure(technical: e.message, statusCode: e.response?.statusCode);
@@ -118,7 +155,7 @@ final class DioClient {
       Options? options,
       CancelToken? cancelToken}) {
     return _dio.head(path,
-        data: data, queryParameters: queryParameters, options: options);
+        data: data, queryParameters: queryParameters, options: options, cancelToken: cancelToken);
   }
 
   Future<Response<T>> put<T>(String path,
@@ -127,7 +164,7 @@ final class DioClient {
         Options? options,
         CancelToken? cancelToken}) {
     return _dio.put(path,
-        data: data, queryParameters: queryParameters, options: options);
+        data: data, queryParameters: queryParameters, options: options, cancelToken: cancelToken);
   }
 
   Future<Response<T>> patch<T>(String path,
@@ -136,6 +173,6 @@ final class DioClient {
         Options? options,
         CancelToken? cancelToken}) {
     return _dio.patch(path,
-        data: data, queryParameters: queryParameters, options: options);
+        data: data, queryParameters: queryParameters, options: options, cancelToken: cancelToken);
   }
 }

@@ -29,8 +29,10 @@ final class StatsRemoteDataSource implements IStatsRemoteDataSource {
       }
 
       return Some(StatsDTO.fromJson(json));
-    } on DioException catch (e) {
-      debugPrint('Failed to retrieve stats: ${e.message}');
+    } catch (e) {
+      // Catches DioException (network errors) as well as JSON parsing errors
+      // so the repository can always fall back to its local cache.
+      debugPrint('Failed to retrieve stats: $e');
       return const None();
     }
   }

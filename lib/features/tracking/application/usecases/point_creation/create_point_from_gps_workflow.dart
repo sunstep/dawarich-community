@@ -84,7 +84,7 @@ final class CreatePointFromGpsWorkflow {
     }
 
     final Result<LocalPoint, String> pointResult =
-        await _createPointFromLocationFix(fix, pointCreationTimestamp, userId);
+        await _createPointFromLocationFix(position: fix, timestamp: pointCreationTimestamp, userId: userId);
 
     if (pointResult case Err()) {
       return pointResult;

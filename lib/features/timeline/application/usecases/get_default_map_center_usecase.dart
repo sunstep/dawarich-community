@@ -8,28 +8,18 @@ final class GetDefaultMapCenterUseCase {
   GetDefaultMapCenterUseCase();
 
   Future<LatLng> call() async {
-    // Try real GPS position first
-    if (await Geolocator.isLocationServiceEnabled()) {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+    // 1. Last known position — instantaneous, no GPS warm-up needed.
+    //    This is the correct initial centre 99 % of the time.
+    try {
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null) {
+        return LatLng(last.latitude, last.longitude);
       }
+    } catch (_) {}
 
-      if (permission != LocationPermission.denied &&
-          permission != LocationPermission.deniedForever) {
-        try {
-          final current = await Geolocator.getCurrentPosition();
-          return LatLng(current.latitude, current.longitude);
-        } catch (_) {
-          final last = await Geolocator.getLastKnownPosition();
-          if (last != null) {
-            return LatLng(last.latitude, last.longitude);
-          }
-        }
-      }
-    }
-
-    // GPS failed → fallback to SIM/locale-based default
+    // 2. SIM / locale centroid — fast, no GPS required.
+    //    (Removed the slow getCurrentPosition() call that could block for
+    //    several seconds when no last-known fix was available.)
     String? countryCode = await DeviceRegion.getSIMCountryCode();
 
     if (countryCode == null) {
@@ -41,11 +31,10 @@ final class GetDefaultMapCenterUseCase {
     return _centroidForIso(countryCode);
   }
 
-
   LatLng _centroidForIso(String iso) {
     final c = Countries.values.firstWhere(
           (e) => e.alpha2.toUpperCase() == iso.toUpperCase(),
-      orElse: () => Countries.values.first, // fallback country
+      orElse: () => Countries.values.first,
     );
     final coord = c.geo.coordinate;
     return LatLng(coord.latitude, coord.longitude);

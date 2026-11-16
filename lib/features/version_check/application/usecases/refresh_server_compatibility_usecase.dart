@@ -90,7 +90,9 @@ final class RefreshServerCompatibilityUseCase {
     }
 
     final packageInfo = await PackageInfo.fromPlatform();
-    final Version appVersion = Version.parse(packageInfo.version);
+    final rawVersion = packageInfo.version;
+    final normalizedVersion = rawVersion.split('-').first;
+    final Version appVersion = Version.parse(normalizedVersion);
 
     final List<dynamic> rulesList = (map['rules'] as List?) ?? const [];
     final Map<String, dynamic> defaultRule =

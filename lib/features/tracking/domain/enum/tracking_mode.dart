@@ -1,4 +1,4 @@
 enum TrackingMode {
-  manual,
+  timer,
   automatic,
 }

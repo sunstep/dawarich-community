@@ -4,6 +4,10 @@
   *;
 }
 
+-keep class io.flutter.plugins.cronet_http.** { *; }
+-keep class com.github.dart_lang.jni.** { *; }
+-keep class org.chromium.net.** { *; }
+
 -dontwarn com.baseflow.geolocator.location.FusedLocationClient
 -dontwarn com.baseflow.geolocator.location.**
 -dontwarn com.google.android.gms.**

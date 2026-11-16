@@ -1,5 +1,6 @@
 
 import 'package:dawarich/features/tracking/domain/enum/location_precision.dart';
+import 'package:dawarich/features/tracking/domain/enum/tracking_mode.dart';
 
 final class TrackerSettings {
   final int userId;
@@ -10,6 +11,8 @@ final class TrackerSettings {
   final int pointsPerBatch;
   final int? batchExpirationMinutes;
   final String deviceId;
+  static const int automaticDefaultMinimumDistanceMeters = 20;
+
 
   const TrackerSettings({
     required this.userId,
@@ -25,6 +28,27 @@ final class TrackerSettings {
   /// Whether batch expiration is enabled (non-null and > 0).
   bool get isBatchExpirationEnabled =>
       batchExpirationMinutes != null && batchExpirationMinutes! > 0;
+
+  TrackingMode get trackingMode {
+
+    if (trackingFrequency > 0) {
+      return TrackingMode.timer;
+    }
+
+    return TrackingMode.automatic;
+  }
+
+  int get effectiveMinimumPointDistanceMeters {
+    if (minimumPointDistance > 0) {
+      return minimumPointDistance;
+    }
+
+    if (trackingMode == TrackingMode.automatic) {
+      return automaticDefaultMinimumDistanceMeters;
+    }
+
+    return 0;
+  }
 
   TrackerSettings copyWith({
     bool? automaticTracking,

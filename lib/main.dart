@@ -5,9 +5,11 @@ import 'package:dawarich/core/di/providers/settings_providers.dart';
 import 'package:dawarich/core/routing/app_router.dart';
 import 'package:dawarich/core/theme/dark_theme.dart';
 import 'package:dawarich/core/theme/light_theme.dart';
+import 'package:dawarich/features/tracking/application/services/background_tracking_entrypoint.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:tracelet/tracelet.dart' as tl;
 late final AppRouter appRouter;
 final container = ProviderContainer();
 
@@ -42,6 +44,7 @@ Future<void> main() async {
 
       appRouter = AppRouter(container);
 
+      tl.Tracelet.registerHeadlessTask(dawarichTraceletHeadlessTask);
       runApp(UncontrolledProviderScope(container: container, child: const Dawarich()));
 
     }, (Object error, StackTrace stack) {

@@ -18,6 +18,11 @@ class AppSettingsTable extends Table {
   TextColumn get themeMode =>
       text().withDefault(const Constant('system'))();
 
+  /// Minimum distance (in metres) between consecutive points shown on the
+  /// timeline.  Points closer than this threshold are merged.  Default: 50 m.
+  IntColumn get timelineDistanceThreshold =>
+      integer().withDefault(const Constant(50))();
+
   @override
   Set<Column> get primaryKey => {userId};
 }

@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:dawarich/core/background/workmanager/stats_refresh_worker.dart';
 import 'package:dawarich/core/di/providers/session_providers.dart';
 import 'package:dawarich/core/di/providers/usecase_providers.dart';
@@ -10,22 +8,18 @@ import 'package:dawarich/core/shell/life_cycle/life_cycle_controller.dart';
 import 'package:dawarich/core/di/providers/settings_providers.dart';
 import 'package:dawarich/features/biometric_lock/domain/app_lock_timestamp_tracker.dart';
 import 'package:dawarich/features/onboarding/application/usecases/check_onboarding_permissions_usecase.dart';
-import 'package:dawarich/features/tracking/application/usecases/notifications/initialize_tracker_notification_usecase.dart';
 import 'package:dawarich/main.dart';
 import 'package:dawarich_android_user_module/dawarich_android_user_module.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:option_result/option_result.dart';
 
 final class StartupService {
   static Future<void> initializeAppFromContainer(ProviderContainer container) async {
     if (kDebugMode) {
       debugPrint('[StartupService] Initializing app...');
     }
-
-    final initNotif = container.read(initializeTrackerNotificationServiceUseCaseProvider);
-    await initNotif();
-
 
     final DawarichAndroidUserModule<User> sessionService =
         await container.read(sessionBoxProvider.future);
@@ -37,6 +31,29 @@ final class StartupService {
       }
 
       sessionService.setUserId(refreshedSessionUser.id);
+
+      try {
+        final pointAutomationService =
+        await container.read(pointAutomationServiceProvider.future);
+
+        final resumeResult =
+        await pointAutomationService.resumeTrackingIfEnabled(
+          refreshedSessionUser.id,
+        );
+
+        if (resumeResult case Err(value: final message)) {
+          debugPrint('[StartupService] $message');
+        }
+      } catch (error, stackTrace) {
+        // Tracking restoration must not prevent the application from opening.
+        debugPrint(
+          '[StartupService] Unable to restore tracking runtime: $error',
+        );
+
+        if (kDebugMode) {
+          debugPrint('$stackTrace');
+        }
+      }
 
       // Initialize the lock tracker with persisted auth time for this user.
       final appSettingsRepo =
@@ -67,19 +84,6 @@ final class StartupService {
       // Register periodic batch upload worker (handles both threshold
       // and expiration uploads when the foreground service isn't running).
       await registerBatchUploadWorker();
-
-
-      final pendingRoute = InitializeTrackerNotificationServiceUseCase.pendingNotificationRoute;
-      if (pendingRoute != null) {
-        if (kDebugMode) {
-          debugPrint('[StartupService] Navigating to pending notification route: $pendingRoute');
-        }
-        InitializeTrackerNotificationServiceUseCase.clearPendingRoute();
-
-        final route = AppRouter.routeFromPath(pendingRoute);
-        appRouter.replaceAll([route]);
-        return;
-      }
 
       if (kDebugMode) {
         debugPrint('[StartupService] Navigating to timeline screen...');

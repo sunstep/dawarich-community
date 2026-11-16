@@ -1,4 +1,4 @@
-package com.sunstep.travel
+package dev.abralabs.travel
 
 import android.content.BroadcastReceiver
 import android.content.Context

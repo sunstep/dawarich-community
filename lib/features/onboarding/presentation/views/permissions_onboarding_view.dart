@@ -60,13 +60,18 @@ class _PermissionsOnboardingViewState
   }
 
   Future<void> _onContinue() async {
-    final isEnabled =
-        await ref.read(isBiometricLockEnabledUseCaseProvider.future);
-    final userId = await ref.read(sessionUserIdProvider.future);
-    final biometricEnabled = userId != null && await isEnabled(userId);
-    if (biometricEnabled) {
-      appRouter.replaceAll([const BiometricLockRoute()]);
-    } else {
+    try {
+      final isEnabled =
+          await ref.read(isBiometricLockEnabledUseCaseProvider.future);
+      final userId = await ref.read(sessionUserIdProvider.future);
+      final biometricEnabled = userId != null && await isEnabled(userId);
+      if (biometricEnabled) {
+        appRouter.replaceAll([const BiometricLockRoute()]);
+      } else {
+        appRouter.replaceAll([const TimelineRoute()]);
+      }
+    } catch (_) {
+      // Providers not yet ready or some other error — go straight to timeline.
       appRouter.replaceAll([const TimelineRoute()]);
     }
   }
@@ -164,14 +169,25 @@ final class _PermissionsContent extends StatelessWidget {
 
                 const SizedBox(height: 20),
 
-                // ── Continue button ──
+                // ── Continue / Skip button ──
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: vm.allGranted ? onContinue : null,
-                    child: const Text('Continue'),
+                    onPressed: onContinue,
+                    child: Text(vm.allGranted ? 'Continue' : 'Skip'),
                   ),
                 ),
+                if (!vm.allGranted) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Some features (background tracking) require these permissions.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.textTheme.bodySmall?.color
+                          ?.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),

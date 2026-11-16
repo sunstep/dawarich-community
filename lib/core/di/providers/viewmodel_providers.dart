@@ -1,4 +1,5 @@
 import 'package:dawarich/core/di/providers/session_providers.dart';
+import 'package:dawarich/core/di/providers/settings_providers.dart';
 import 'package:dawarich/core/di/providers/usecase_providers.dart';
 import 'package:dawarich/features/points/presentation/viewmodels/points_viewmodel.dart';
 import 'package:dawarich/features/timeline/presentation/models/timeline_page_viewmodel.dart';
@@ -17,6 +18,7 @@ final timelineViewModelProvider = FutureProvider<TimelineViewModel>((ref) async 
     ref.watch(timelinePointsProcessorProvider),
     ref.watch(getDefaultMapCenterUseCaseProvider),
     await ref.watch(watchCurrentBatchUseCaseProvider.future),
+    await ref.watch(getTimelineDistanceThresholdUseCaseProvider.future),
   );
 
   vm.initialize();
@@ -38,8 +40,11 @@ final trackerPageViewModelProvider = FutureProvider<TrackerPageViewModel>((ref) 
     throw StateError('TrackerPageViewModel requires authenticated user');
   }
 
+
   final vm = TrackerPageViewModel(
     user.id,
+    await ref.watch(pointAutomationServiceProvider.future),
+    await ref.watch(watchTrackerSettingsUseCaseProvider.future),
     await ref.watch(getTrackerSettingsUseCaseProvider.future),
     await ref.watch(saveTrackerSettingsUseCaseProvider.future),
     ref.watch(getDeviceModelUseCaseProvider),

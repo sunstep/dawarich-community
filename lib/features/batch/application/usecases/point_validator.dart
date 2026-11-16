@@ -97,7 +97,7 @@ final class PointValidator {
   Future<bool> _isPointDistanceGreaterThanPreference(LocalPoint point, LastPoint lastPoint, int userId) async {
     bool answer = true;
     final TrackerSettings settings = await _getTrackerSettings(userId);
-    final int minimumDistance = settings.minimumPointDistance;
+    final int minimumDistance = settings.effectiveMinimumPointDistanceMeters;
 
     double currentPointLongitude = point.geometry.longitude;
     double currentPointLatitude = point.geometry.latitude;
