@@ -63,6 +63,8 @@
   </tr>
 </table>
 
+WARNING: The app is outdated on F-Droid due to package name change!!! Please download the app from a different source until the changes are properly processed on F-Droid
+
 <table align="center" style="max-width: 900px; width: 100%; border-collapse: separate; border-spacing: 0;">
   <tr>
     <td style="
