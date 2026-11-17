@@ -92,7 +92,7 @@ WARNING: The app is outdated on F-Droid due to package name change!!! Please dow
 </p>
 
 <p align="center">
-  <a href="https://f-droid.org/packages/YOUR.APP.ID">
+  <a href="https://f-droid.org/en/packages/com.sunstep.travel.foss">
     <img src="https://fdroid.gitlab.io/artwork/badge/get-it-on.png"
     alt="Get it on F-Droid"
     height="80">
